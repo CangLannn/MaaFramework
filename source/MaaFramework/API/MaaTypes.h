@@ -19,9 +19,7 @@ public:
     virtual void post_stop() {}
 };
 
-struct MaaResourceAPI
-    : public MaaInstanceSink
-    , public MaaDebugContextAPI
+struct MaaResourceAPI : public MaaInstanceSink
 {
 public:
     virtual ~MaaResourceAPI() = default;
@@ -141,6 +139,14 @@ public:
     virtual MaaInstanceHandle instance() = 0;
     virtual MaaResourceHandle resource() = 0;
     virtual MaaControllerHandle controller() = 0;
+};
+
+struct MaaDebugContextAPI
+{
+public:
+    virtual ~MaaDebugContextAPI() = default;
+
+    virtual const MAA_DEBUG_NS::Task* get_task_debug_info(std::string_view task) const = 0;
 };
 
 struct MaaStringBuffer
