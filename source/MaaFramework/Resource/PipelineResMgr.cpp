@@ -1,11 +1,17 @@
 #include "PipelineResMgr.h"
 
+#include "Option/GlobalOptionMgr.h"
 #include "Utils/Codec.h"
 #include "Utils/Logger.h"
 #include "Utils/StringMisc.hpp"
 #include "Vision/VisionTypes.h"
 
 MAA_RES_NS_BEGIN
+
+inline bool debug_trace_info()
+{
+    return GlobalOptionMgr::get_instance().debug_trace_info();
+}
 
 bool PipelineResMgr::load(const std::filesystem::path& path, bool is_base)
 {
@@ -101,7 +107,15 @@ bool PipelineResMgr::open_and_parse_file(
 {
     LogFunc << VAR(path);
 
-    auto json_opt = json::open(path);
+    bool trace = debug_trace_info();
+
+    json::location::location_info_generator gen;
+    json::location::visitor<std::string>* vis = nullptr;
+    if (trace) {
+        vis = &gen;
+    }
+
+    auto json_opt = json::open(path, false, vis);
     if (!json_opt) {
         LogError << "json::open failed" << VAR(path);
         return false;
@@ -109,7 +123,13 @@ bool PipelineResMgr::open_and_parse_file(
     const auto& json = *json_opt;
 
     TaskDataMap cur_data_map;
-    if (!parse_config(json, cur_data_map, existing_keys, task_data_map_)) {
+    if (!parse_config(
+            json,
+            cur_data_map,
+            existing_keys,
+            task_data_map_,
+            trace ? std::make_optional<DebugInfo::Json>(path, gen.info()) : std::nullopt,
+            task_debug_info_)) {
         LogError << "parse_config failed" << VAR(path) << VAR(json);
         return false;
     }
@@ -156,8 +176,22 @@ bool PipelineResMgr::parse_config(
     const json::value& input,
     TaskDataMap& output,
     std::set<std::string>& existing_keys,
-    const TaskDataMap& default_value)
+    const TaskDataMap& default_value,
+    const std::optional<DebugInfo::Json>& input_info,
+    TaskDebugInfoMap& debug_info)
 {
+    const DebugInfo::Json* input_info_ptr = nullptr;
+    bool trace = debug_trace_info();
+
+    if (trace && input_info.has_value()) {
+        const auto& info = input_info.value();
+        if (info.location.is_obj()) {
+            input_info_ptr = &info;
+        }
+    }
+    std::ignore = input_info;
+    std::ignore = debug_info;
+
     if (!input.is_object()) {
         LogError << "json is not object";
         return false;
@@ -193,6 +227,20 @@ bool PipelineResMgr::parse_config(
         }
         data_map.insert_or_assign(key, task_data);
         existing_keys.emplace(key);
+
+        if (trace) {
+            if (input_info_ptr && input_info_ptr->location.obj().contains(key)) {
+                const auto& sub = input_info_ptr->location.obj().at(key);
+                debug_info[key].trace.push_back(
+                    DebugInfo::Task::Trace { value,
+                                             std::make_optional<DebugInfo::Source>(
+                                                 input_info_ptr->file,
+                                                 sub.info._self.start) });
+            }
+            else {
+                debug_info[key].trace.push_back(DebugInfo::Task::Trace { value, std::nullopt });
+            }
+        }
     }
 
     output = std::move(data_map);

@@ -103,6 +103,11 @@ enum MaaGlobalOptionEnum
     ///
     /// value: bool, eg: true; val_size: sizeof(bool)
     MaaGlobalOption_DebugMessage = 6,
+
+    /// Whether to preserve debug trace info
+    ///
+    /// value: bool, eg: true; val_size: sizeof(bool)
+    MaaGlobalOption_DebugTraceInfo = 7,
 };
 
 typedef MaaOption MaaResOption;

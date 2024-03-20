@@ -25,6 +25,7 @@ public:
 
 private:
     using TaskDataMap = MAA_RES_NS::PipelineResMgr::TaskDataMap;
+    using TaskDebugInfoMap = MAA_RES_NS::PipelineResMgr::TaskDebugInfoMap;
 
     bool set_diff_task(const json::value& input);
 
@@ -34,6 +35,7 @@ private:
 private:
     InstanceInternalAPI* inst_ = nullptr;
     TaskDataMap diff_tasks_;
+    TaskDebugInfoMap task_debug_info_;
 };
 
 MAA_TASK_NS_END

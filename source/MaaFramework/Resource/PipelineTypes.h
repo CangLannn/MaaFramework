@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -14,6 +15,32 @@
 #include "Vision/VisionTypes.h"
 
 MAA_RES_NS_BEGIN
+
+namespace DebugInfo
+{
+struct Source
+{
+    std::filesystem::path file;
+    json::location::position pos;
+};
+
+struct Task
+{
+    struct Trace
+    {
+        json::value value;
+        std::optional<Source> source;
+    };
+
+    std::vector<Trace> trace;
+};
+
+struct Json
+{
+    std::filesystem::path file;
+    json::location::location_info<std::string> location;
+};
+}
 
 namespace Recognition
 {

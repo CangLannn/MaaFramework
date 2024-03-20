@@ -25,6 +25,8 @@ bool GlobalOptionMgr::set_option(
         return set_show_hit_draw(value, val_size);
     case MaaGlobalOption_DebugMessage:
         return set_debug_message(value, val_size);
+    case MaaGlobalOption_DebugTraceInfo:
+        return set_debug_trace_info(value, val_size);
     default:
         LogError << "Unknown key" << VAR(key) << VAR(value);
         return false;
@@ -123,6 +125,22 @@ bool GlobalOptionMgr::set_debug_message(MaaOptionValue value, MaaOptionValueSize
     debug_message_ = *reinterpret_cast<const bool*>(value);
 
     LogInfo << "Set debug message" << VAR(debug_message_);
+
+    return true;
+}
+
+bool GlobalOptionMgr::set_debug_trace_info(MaaOptionValue value, MaaOptionValueSize val_size)
+{
+    LogFunc;
+
+    if (val_size != sizeof(bool)) {
+        LogError << "Invalid value size" << VAR(val_size);
+        return false;
+    }
+
+    debug_trace_info_ = *reinterpret_cast<const bool*>(value);
+
+    LogInfo << "Set debug trace info" << VAR(debug_trace_info_);
 
     return true;
 }

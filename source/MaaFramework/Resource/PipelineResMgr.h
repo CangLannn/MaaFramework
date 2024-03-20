@@ -17,6 +17,7 @@ class PipelineResMgr : public NonCopyable
 {
 public:
     using TaskDataMap = std::unordered_map<std::string, TaskData>;
+    using TaskDebugInfoMap = std::unordered_map<std::string, DebugInfo::Task>;
 
 public:
     bool load(const std::filesystem::path& path, bool is_base);
@@ -35,7 +36,9 @@ public:
         const json::value& input,
         TaskDataMap& output,
         std::set<std::string>& existing_keys,
-        const TaskDataMap& default_value);
+        const TaskDataMap& default_value,
+        const std::optional<DebugInfo::Json>& input_info,
+        TaskDebugInfoMap& debug_info);
     static bool parse_task(
         const std::string& name,
         const json::value& input,
@@ -148,6 +151,7 @@ private:
 private:
     std::vector<std::filesystem::path> paths_;
     TaskDataMap task_data_map_;
+    TaskDebugInfoMap task_debug_info_;
 };
 
 MAA_RES_NS_END
