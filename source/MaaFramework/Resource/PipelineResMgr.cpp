@@ -56,7 +56,7 @@ const TaskData& PipelineResMgr::get_task_data(const std::string& task_name)
     return task_iter->second;
 }
 
-const DebugInfo::Task* PipelineResMgr::get_task_debug_info(const std::string& task_name) const
+const DebugNS::Task* PipelineResMgr::get_task_debug_info(const std::string& task_name) const
 {
     auto task_iter = task_debug_info_.find(task_name);
     if (task_iter == task_debug_info_.end()) {
@@ -139,7 +139,7 @@ bool PipelineResMgr::open_and_parse_file(
             cur_data_map,
             existing_keys,
             task_data_map_,
-            trace ? std::make_optional<DebugInfo::Json>(path, gen.info()) : std::nullopt,
+            trace ? std::make_optional<DebugNS::Json>(path, gen.info()) : std::nullopt,
             task_debug_info_)) {
         LogError << "parse_config failed" << VAR(path) << VAR(json);
         return false;
@@ -188,10 +188,10 @@ bool PipelineResMgr::parse_config(
     TaskDataMap& output,
     std::set<std::string>& existing_keys,
     const TaskDataMap& default_value,
-    const std::optional<DebugInfo::Json>& input_info,
+    const std::optional<DebugNS::Json>& input_info,
     TaskDebugInfoMap& debug_info)
 {
-    const DebugInfo::Json* input_info_ptr = nullptr;
+    const DebugNS::Json* input_info_ptr = nullptr;
     bool trace = debug_trace_info();
 
     if (trace && input_info.has_value()) {
@@ -243,13 +243,13 @@ bool PipelineResMgr::parse_config(
             if (input_info_ptr && input_info_ptr->location.obj().contains(key)) {
                 const auto& sub = input_info_ptr->location.obj().at(key);
                 debug_info[key].trace.push_back(
-                    DebugInfo::Task::Trace { value,
-                                             std::make_optional<DebugInfo::Source>(
-                                                 input_info_ptr->file,
-                                                 sub.info._self.start) });
+                    DebugNS::Task::Trace { value,
+                                           std::make_optional<DebugNS::Source>(
+                                               input_info_ptr->file,
+                                               sub.info._self.start) });
             }
             else {
-                debug_info[key].trace.push_back(DebugInfo::Task::Trace { value, std::nullopt });
+                debug_info[key].trace.push_back(DebugNS::Task::Trace { value, std::nullopt });
             }
         }
     }

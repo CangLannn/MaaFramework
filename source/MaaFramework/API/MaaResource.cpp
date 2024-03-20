@@ -147,13 +147,7 @@ MaaBool MaaResourceGetTaskTraceInfo(
         return false;
     }
 
-    auto res_mgr = dynamic_cast<MAA_RES_NS::ResourceMgr*>(res);
-    if (!res_mgr) {
-        LogError << "invalid resource handle";
-        return false;
-    }
-    const auto& pipeline_res = res_mgr->pipeline_res();
-    auto info = pipeline_res.get_task_debug_info(task);
+    auto info = res->get_task_debug_info(task);
     if (info) {
         json::array trace;
         for (const auto& src : info->trace) {

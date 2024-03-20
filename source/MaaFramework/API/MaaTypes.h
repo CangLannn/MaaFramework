@@ -7,6 +7,7 @@
 
 #include <meojson/json.hpp>
 
+#include "Debug/DebugTypes.h"
 #include "MaaFramework/MaaDef.h"
 #include "Utils/NoWarningCVMat.hpp"
 
@@ -18,7 +19,9 @@ public:
     virtual void post_stop() {}
 };
 
-struct MaaResourceAPI : public MaaInstanceSink
+struct MaaResourceAPI
+    : public MaaInstanceSink
+    , public MaaDebugContextAPI
 {
 public:
     virtual ~MaaResourceAPI() = default;
@@ -35,6 +38,7 @@ public:
 
     virtual std::string get_hash() const = 0;
     virtual std::vector<std::string> get_task_list() const = 0;
+    virtual const MAA_DEBUG_NS::Task* get_task_debug_info(std::string_view task) const = 0;
 };
 
 struct MaaControllerAPI : public MaaInstanceSink

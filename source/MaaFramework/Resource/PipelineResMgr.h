@@ -10,6 +10,7 @@
 #include "Conf/Conf.h"
 #include "PipelineTypes.h"
 #include "Utils/NonCopyable.hpp"
+#include "Vision/VisionTypes.h"
 
 MAA_RES_NS_BEGIN
 
@@ -17,7 +18,7 @@ class PipelineResMgr : public NonCopyable
 {
 public:
     using TaskDataMap = std::unordered_map<std::string, TaskData>;
-    using TaskDebugInfoMap = std::unordered_map<std::string, DebugInfo::Task>;
+    using TaskDebugInfoMap = std::unordered_map<std::string, DebugNS::Task>;
 
 public:
     bool load(const std::filesystem::path& path, bool is_base);
@@ -25,11 +26,13 @@ public:
 
     const TaskData& get_task_data(const std::string& task_name);
 
-    const DebugInfo::Task* get_task_debug_info(const std::string& task_name) const;
+    const DebugNS::Task* get_task_debug_info(const std::string& task_name) const;
 
     const std::vector<std::filesystem::path>& get_paths() const { return paths_; }
 
     const TaskDataMap& get_task_data_map() const { return task_data_map_; }
+
+    const TaskDebugInfoMap& get_task_debug_info_map() const { return task_debug_info_; }
 
     std::vector<std::string> get_task_list() const;
 
@@ -39,7 +42,7 @@ public:
         TaskDataMap& output,
         std::set<std::string>& existing_keys,
         const TaskDataMap& default_value,
-        const std::optional<DebugInfo::Json>& input_info,
+        const std::optional<DebugNS::Json>& input_info,
         TaskDebugInfoMap& debug_info);
     static bool parse_task(
         const std::string& name,

@@ -126,6 +126,11 @@ std::vector<std::string> ResourceMgr::get_task_list() const
     return pipeline_res_.get_task_list();
 }
 
+const DebugNS::Task* ResourceMgr::get_task_debug_info(std::string_view task) const
+{
+    return pipeline_res_.get_task_debug_info(std::string(task));
+}
+
 void ResourceMgr::post_stop()
 {
     LogFunc;

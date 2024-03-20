@@ -57,7 +57,7 @@ bool TaskDataMgr::set_diff_task(const json::value& input)
     }
 
     if (GlobalOptionMgr::get_instance().debug_trace_info()) {
-        task_debug_info_ = resource()->pipeline_res().get_task_debug_info();
+        task_debug_info_ = resource()->pipeline_res().get_task_debug_info_map();
     }
 
     MAA_RES_NS::PipelineResMgr::TaskDataMap task_data_map;

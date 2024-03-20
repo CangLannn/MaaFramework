@@ -31,6 +31,7 @@ public:
 
     virtual std::string get_hash() const override;
     virtual std::vector<std::string> get_task_list() const override;
+    virtual const DebugNS::Task* get_task_debug_info(std::string_view task) const override;
 
 public: // from MaaInstanceSink
     virtual void post_stop() override;
