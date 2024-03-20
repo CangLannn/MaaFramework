@@ -117,6 +117,20 @@ extern "C"
     MAA_FRAMEWORK_API MaaBool
         MaaResourceGetTaskList(MaaResourceHandle res, MaaStringBufferHandle buffer);
 
+    /**
+     * @brief Get the task trace info in resource scope.
+     *
+     * @param res
+     * @param task Querying task
+     * @param[out] buffer The buffer where the trace info will be written to.
+     *
+     * @return MaaBool
+     */
+    MAA_FRAMEWORK_API MaaBool MaaResourceGetTaskTraceInfo(
+        MaaResourceHandle res,
+        MaaStringView task,
+        MaaStringBufferHandle buffer);
+
 #ifdef __cplusplus
 }
 #endif

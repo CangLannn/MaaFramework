@@ -136,3 +136,45 @@ MaaBool MaaResourceGetTaskList(MaaResourceHandle res, /* out */ MaaStringBufferH
     buffer->set(json::array(list).to_string());
     return true;
 }
+
+MaaBool MaaResourceGetTaskTraceInfo(
+    MaaResourceHandle res,
+    MaaStringView task,
+    MaaStringBufferHandle buffer)
+{
+    if (!res || !task || !buffer) {
+        LogError << "handle is null";
+        return false;
+    }
+
+    auto res_mgr = dynamic_cast<MAA_RES_NS::ResourceMgr*>(res);
+    if (!res_mgr) {
+        LogError << "invalid resource handle";
+        return false;
+    }
+    const auto& pipeline_res = res_mgr->pipeline_res();
+    auto info = pipeline_res.get_task_debug_info(task);
+    if (info) {
+        json::array trace;
+        for (const auto& src : info->trace) {
+            json::object source = { { "value", src.value }, { "source", json::value() } };
+            if (src.source.has_value()) {
+                const auto& val = src.source.value();
+                source["source"] = json::object { { "file", val.file.string() },
+                                                  { "pos",
+                                                    {
+                                                        { "offset", val.pos.offset },
+                                                        { "row", val.pos.row },
+                                                        { "column", val.pos.column },
+                                                    } } };
+            }
+            trace.push_back(source);
+        }
+        json::object result = { { "trace", trace } };
+        buffer->set(result.to_string());
+        return true;
+    }
+    else {
+        return false;
+    }
+}

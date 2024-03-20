@@ -13,6 +13,9 @@ __CALL_DECLARE_OUTER_STATE(maa::func_type_MaaSetImageEncoded::_1_data, std::stri
 
 __CALL_DECLARE_OUTER_STATE(maa::func_type_MaaResourceGetTaskList::_1_buffer, MaaStringBufferHandle)
 __CALL_DECLARE_OUTER_STATE(maa::func_type_MaaResourceGetHash::_1_buffer, MaaStringBufferHandle)
+__CALL_DECLARE_OUTER_STATE(
+    maa::func_type_MaaResourceGetTaskTraceInfo::_2_buffer,
+    MaaStringBufferHandle)
 __CALL_DECLARE_OUTER_STATE(maa::func_type_MaaControllerGetUUID::_1_buffer, MaaStringBufferHandle)
 __CALL_DECLARE_OUTER_STATE(
     maa::func_type_MaaSyncContextGetTaskResult::_2_out_task_result,

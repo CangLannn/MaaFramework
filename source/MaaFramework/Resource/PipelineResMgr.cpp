@@ -56,6 +56,17 @@ const TaskData& PipelineResMgr::get_task_data(const std::string& task_name)
     return task_iter->second;
 }
 
+const DebugInfo::Task* PipelineResMgr::get_task_debug_info(const std::string& task_name) const
+{
+    auto task_iter = task_debug_info_.find(task_name);
+    if (task_iter == task_debug_info_.end()) {
+        LogError << "Invalid task name" << VAR(task_name);
+        return nullptr;
+    }
+
+    return &task_iter->second;
+}
+
 bool PipelineResMgr::load_all_json(const std::filesystem::path& path)
 {
     if (!std::filesystem::exists(path)) {

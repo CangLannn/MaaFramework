@@ -867,6 +867,24 @@
     {
       "argument": [
         {
+          "name": "res",
+          "type": "MaaResourceHandle"
+        },
+        {
+          "name": "task",
+          "type": "MaaStringView"
+        },
+        {
+          "name": "buffer",
+          "type": "MaaStringBufferHandle"
+        }
+      ],
+      "name": "MaaResourceGetTaskTraceInfo",
+      "return": "MaaBool"
+    },
+    {
+      "argument": [
+        {
           "name": "sync_context",
           "type": "MaaSyncContextHandle"
         },
