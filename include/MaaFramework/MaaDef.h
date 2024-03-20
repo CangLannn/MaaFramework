@@ -294,6 +294,15 @@ typedef struct MaaCustomActionAPI* MaaCustomActionHandle;
 struct MaaSyncContextAPI;
 typedef struct MaaSyncContextAPI* MaaSyncContextHandle;
 
+struct MaaDebugContextAPI;
+typedef struct MaaDebugContextAPI* MaaDebugContextHandle;
+
+typedef void (*MaaDebugCallback)(
+    MaaStringView msg,
+    MaaStringView details_json,
+    MaaDebugContextHandle debug_context,
+    MaaTransparentArg callback_arg);
+
 #ifdef __cplusplus
 extern "C"
 {
