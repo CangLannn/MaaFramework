@@ -1,5 +1,6 @@
 #include "TaskDataMgr.h"
 
+#include "Option/GlobalOptionMgr.h"
 #include "Resource/ResourceMgr.h"
 #include "Utils/ImageIo.h"
 #include "Utils/Logger.h"
@@ -53,6 +54,10 @@ bool TaskDataMgr::set_diff_task(const json::value& input)
     if (!resource()) {
         LogError << "Resource not binded";
         return false;
+    }
+
+    if (GlobalOptionMgr::get_instance().debug_trace_info()) {
+        task_debug_info_ = resource()->pipeline_res().get_task_debug_info();
     }
 
     MAA_RES_NS::PipelineResMgr::TaskDataMap task_data_map;
