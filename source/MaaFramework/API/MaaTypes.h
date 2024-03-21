@@ -146,6 +146,7 @@ struct MaaDebugContextAPI
 public:
     virtual ~MaaDebugContextAPI() = default;
 
+    virtual std::vector<std::string> get_task_list() const = 0;
     virtual const MAA_DEBUG_NS::Task* get_task_debug_info(std::string_view task) const = 0;
 };
 

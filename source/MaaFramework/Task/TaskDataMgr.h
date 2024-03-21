@@ -20,6 +20,7 @@ public:
 public:
     explicit TaskDataMgr(InstanceInternalAPI* inst);
 
+    std::vector<std::string> get_task_list();
     const TaskData& get_task_data(const std::string& task_name);
     bool set_param(const json::value& param);
 

@@ -4,12 +4,30 @@
 #include "Resource/ResourceMgr.h"
 #include "Utils/ImageIo.h"
 #include "Utils/Logger.h"
+#include <ranges>
+#include <vector>
 
 MAA_TASK_NS_BEGIN
 
 TaskDataMgr::TaskDataMgr(InstanceInternalAPI* inst)
     : inst_(inst)
 {
+}
+
+std::vector<std::string> TaskDataMgr::get_task_list()
+{
+    if (!resource()) {
+        LogError << "Resource not binded";
+        return {};
+    }
+    auto& raw_data_mgr = resource()->pipeline_res();
+    auto raw_tasks = raw_data_mgr.get_task_list();
+    auto diff_tasks = diff_tasks_ | std::views::keys;
+
+    std::set<std::string> tasks(raw_tasks.begin(), raw_tasks.end());
+    tasks.insert(diff_tasks.begin(), diff_tasks.end());
+
+    return std::vector<std::string>(tasks.begin(), tasks.end());
 }
 
 const MAA_RES_NS::TaskData& TaskDataMgr::get_task_data(const std::string& task_name)

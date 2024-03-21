@@ -14,11 +14,19 @@
 #include "Task/Recognizer.h"
 #include "Task/TaskDataMgr.h"
 
+MAA_DEBUG_NS_BEGIN
+
+class DebugContext;
+
+MAA_DEBUG_NS_END
+
 MAA_TASK_NS_BEGIN
 
 class PipelineTask : public MaaInstanceSink
 {
 public:
+    friend class DebugNS::DebugContext;
+
     using TaskData = MAA_RES_NS::TaskData;
 
 public:
