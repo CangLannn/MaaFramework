@@ -59,19 +59,19 @@ public: // from InstanceInternalAPI
     virtual void notify(std::string_view msg, const json::value& details = json::value()) override;
     virtual CustomRecognizerSession* custom_recognizer_session(const std::string& name) override;
     virtual CustomActionSession* custom_action_session(const std::string& name) override;
+    virtual StopNotifier& stop_notifier() override;
 
 private:
     using TaskPtr = std::shared_ptr<TaskNS::PipelineTask>;
     using TaskId = AsyncRunner<TaskPtr>::Id;
 
     bool run_task(TaskId id, TaskPtr task_ptr);
-    bool check_stop();
 
 private:
     MaaResourceAPI* resource_ = nullptr;
     MaaControllerAPI* controller_ = nullptr;
     InstanceStatus status_;
-    bool need_to_stop_ = false;
+    StopNotifier stop_notifier_;
 
     std::unordered_map<std::string, CustomRecognizerSession> custom_recognizer_sessions_;
     std::unordered_map<std::string, CustomActionSession> custom_action_sessions_;

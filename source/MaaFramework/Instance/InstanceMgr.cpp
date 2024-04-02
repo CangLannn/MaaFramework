@@ -1,5 +1,6 @@
 #include "InstanceMgr.h"
 
+#include "Base/StopNotifier.hpp"
 #include "Controller/ControllerAgent.h"
 #include "MaaFramework/MaaMsg.h"
 #include "Resource/ResourceMgr.h"
@@ -14,6 +15,13 @@ InstanceMgr::InstanceMgr(MaaInstanceCallback callback, MaaCallbackTransparentArg
     : notifier(callback, callback_arg)
 {
     LogFunc << VAR_VOIDP(callback) << VAR_VOIDP(callback_arg);
+
+    stop_notifier_.set_is_running([this]() { return running(); });
+    stop_notifier_.set_on_stop([this]() {
+        if (task_runner_ && task_runner_->running()) {
+            task_runner_->clear();
+        }
+    });
 
     task_runner_ = std::make_unique<AsyncRunner<TaskPtr>>(
         std::bind(&InstanceMgr::run_task, this, std::placeholders::_1, std::placeholders::_2));
@@ -37,7 +45,14 @@ bool InstanceMgr::bind_resource(MaaResourceAPI* resource)
         return false;
     }
 
+    if (controller_) {
+        stop_notifier_.unchain(resource_->stop_notifier());
+    }
+
     resource_ = resource;
+
+    stop_notifier_.chain(resource_->stop_notifier());
+
     return true;
 }
 
@@ -50,7 +65,14 @@ bool InstanceMgr::bind_controller(MaaControllerAPI* controller)
         return false;
     }
 
+    if (controller_) {
+        stop_notifier_.unchain(controller_->stop_notifier());
+    }
+
     controller_ = controller;
+
+    stop_notifier_.chain(controller->stop_notifier());
+
     return true;
 }
 
@@ -79,11 +101,13 @@ MaaTaskId InstanceMgr::post_task(std::string entry, std::string_view param)
     }
 #endif
 
-    if (!check_stop()) {
+    if (!stop_notifier_.idle()) {
         return MaaInvalidId;
     }
 
     TaskPtr task_ptr = std::make_shared<TaskNS::PipelineTask>(std::move(entry), this);
+
+    stop_notifier_.chain(task_ptr->stop_notifier());
 
     auto param_opt = json::parse(param);
     if (!param_opt) {
@@ -203,33 +227,14 @@ MaaStatus InstanceMgr::task_wait(MaaTaskId task_id) const
 
 MaaBool InstanceMgr::running() const
 {
-    return resource_ && resource_->running() && controller_ && controller_->running()
-           && task_runner_ && task_runner_->running();
+    return task_runner_ && task_runner_->running();
 }
 
 void InstanceMgr::post_stop()
 {
     LogFunc;
 
-    need_to_stop_ = true;
-
-    if (resource_) {
-        resource_->post_stop();
-    }
-    if (controller_) {
-        controller_->post_stop();
-    }
-
-    if (task_runner_ && task_runner_->running()) {
-        task_runner_->for_each([](TaskId id, TaskPtr task_ptr) {
-            std::ignore = id;
-            if (!task_ptr) {
-                return;
-            }
-            task_ptr->post_stop();
-        });
-        task_runner_->clear();
-    }
+    stop_notifier_.stop();
 }
 
 MaaResourceHandle InstanceMgr::resource()
@@ -282,6 +287,11 @@ CustomActionSession* InstanceMgr::custom_action_session(const std::string& name)
     return &it->second;
 }
 
+StopNotifier& InstanceMgr::stop_notifier()
+{
+    return stop_notifier_;
+}
+
 bool InstanceMgr::run_task(TaskId id, TaskPtr task_ptr)
 {
     LogFunc << VAR(id) << VAR(task_ptr);
@@ -315,21 +325,6 @@ bool InstanceMgr::run_task(TaskId id, TaskPtr task_ptr)
     MAA_LOG_NS::Logger::get_instance().flush();
 
     return ret;
-}
-
-bool InstanceMgr::check_stop()
-{
-    if (!need_to_stop_) {
-        return true;
-    }
-
-    if (running()) {
-        LogError << "stopping, ignore new post";
-        return false;
-    }
-
-    need_to_stop_ = false;
-    return true;
 }
 
 MAA_NS_END

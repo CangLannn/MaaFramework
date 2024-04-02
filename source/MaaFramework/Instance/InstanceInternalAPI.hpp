@@ -5,6 +5,7 @@
 
 #include <meojson/json.hpp>
 
+#include "Base/StopNotifier.hpp"
 #include "Conf/Conf.h"
 #include "MaaFramework/Task/MaaCustomAction.h"
 #include "MaaFramework/Task/MaaCustomRecognizer.h"
@@ -43,6 +44,7 @@ public:
     virtual void notify(std::string_view msg, const json::value& details = json::value()) = 0;
     virtual CustomRecognizerSession* custom_recognizer_session(const std::string& name) = 0;
     virtual CustomActionSession* custom_action_session(const std::string& name) = 0;
+    virtual StopNotifier& stop_notifier() = 0;
 };
 
 MAA_NS_END

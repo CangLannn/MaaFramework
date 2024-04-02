@@ -5,6 +5,7 @@
 #include "API/MaaTypes.h"
 #include "Base/AsyncRunner.hpp"
 #include "Base/MessageNotifier.hpp"
+#include "Base/StopNotifier.hpp"
 #include "OCRResMgr.h"
 #include "ONNXResMgr.h"
 #include "PipelineResMgr.h"
@@ -33,7 +34,7 @@ public:
     virtual std::vector<std::string> get_task_list() const override;
 
 public: // from MaaInstanceSink
-    virtual void post_stop() override;
+    virtual StopNotifier& stop_notifier() override;
 
 public:
     const auto& pipeline_res() const { return pipeline_res_; }
@@ -55,10 +56,9 @@ public:
 private:
     bool run_load(typename AsyncRunner<std::filesystem::path>::Id id, std::filesystem::path path);
     bool load(const std::filesystem::path& path);
-    bool check_stop();
 
 private:
-    bool need_to_stop_ = false;
+    StopNotifier stop_notifier_;
 
 private:
     PipelineResMgr pipeline_res_;

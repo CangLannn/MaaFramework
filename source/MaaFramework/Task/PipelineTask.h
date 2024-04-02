@@ -6,6 +6,7 @@
 #include <meojson/json.hpp>
 
 #include "API/MaaTypes.h"
+#include "Base/StopNotifier.hpp"
 #include "Conf/Conf.h"
 #include "Instance/InstanceInternalAPI.hpp"
 #include "Resource/PipelineResMgr.h"
@@ -26,7 +27,7 @@ public:
     virtual ~PipelineTask() override = default;
 
 public: // from MaaInstanceSink
-    virtual void post_stop() override { need_to_stop_ = true; }
+    StopNotifier& stop_notifier() override { return stop_notifier_; }
 
 public:
     const std::string& entry() const { return entry_; }
@@ -78,14 +79,14 @@ private:
         }
     }
 
-    bool need_to_stop() const { return need_to_stop_; }
+    bool need_to_stop() const { return stop_notifier_.needs_stop(); }
 
     bool debug_mode() const;
     json::object basic_info();
     std::filesystem::path dump_image(const cv::Mat& image) const;
 
 private:
-    bool need_to_stop_ = false;
+    StopNotifier stop_notifier_;
     InstanceInternalAPI* inst_ = nullptr;
 
     int64_t task_id_ = 0;

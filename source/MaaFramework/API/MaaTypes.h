@@ -7,6 +7,7 @@
 
 #include <meojson/json.hpp>
 
+#include "Base/StopNotifier.hpp"
 #include "MaaFramework/MaaDef.h"
 #include "Utils/NoWarningCVMat.hpp"
 
@@ -15,7 +16,7 @@ struct MaaInstanceSink
 public:
     virtual ~MaaInstanceSink() = default;
 
-    virtual void post_stop() {}
+    virtual MaaNS::StopNotifier& stop_notifier() = 0;
 };
 
 struct MaaResourceAPI : public MaaInstanceSink

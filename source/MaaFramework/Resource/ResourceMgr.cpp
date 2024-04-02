@@ -2,6 +2,7 @@
 
 #include <tuple>
 
+#include "Base/StopNotifier.hpp"
 #include "MaaFramework/MaaMsg.h"
 #include "Utils/Logger.h"
 #include "Utils/Platform.h"
@@ -12,6 +13,13 @@ ResourceMgr::ResourceMgr(MaaResourceCallback callback, MaaCallbackTransparentArg
     : notifier(callback, callback_arg)
 {
     LogFunc << VAR_VOIDP(callback) << VAR_VOIDP(callback_arg);
+
+    stop_notifier_.set_is_running([this]() { return running(); });
+    stop_notifier_.set_on_stop([this]() {
+        if (res_loader_ && res_loader_->running()) {
+            res_loader_->clear();
+        }
+    });
 
     res_loader_ = std::make_unique<AsyncRunner<std::filesystem::path>>(
         std::bind(&ResourceMgr::run_load, this, std::placeholders::_1, std::placeholders::_2));
@@ -39,7 +47,7 @@ MaaResId ResourceMgr::post_path(std::filesystem::path path)
 {
     LogInfo << VAR(path);
 
-    if (!check_stop()) {
+    if (!stop_notifier_.idle()) {
         return MaaInvalidId;
     }
 
@@ -126,15 +134,9 @@ std::vector<std::string> ResourceMgr::get_task_list() const
     return pipeline_res_.get_task_list();
 }
 
-void ResourceMgr::post_stop()
+StopNotifier& ResourceMgr::stop_notifier()
 {
-    LogFunc;
-
-    need_to_stop_ = true;
-
-    if (res_loader_ && res_loader_->running()) {
-        res_loader_->clear();
-    }
+    return stop_notifier_;
 }
 
 MaaBool ResourceMgr::running() const
@@ -209,21 +211,6 @@ bool ResourceMgr::load(const std::filesystem::path& path)
     LogInfo << VAR(path) << VAR(ret);
 
     return ret;
-}
-
-bool ResourceMgr::check_stop()
-{
-    if (!need_to_stop_) {
-        return true;
-    }
-
-    if (running()) {
-        LogError << "stopping, ignore new post";
-        return false;
-    }
-
-    need_to_stop_ = false;
-    return true;
 }
 
 MAA_RES_NS_END

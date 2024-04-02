@@ -167,7 +167,7 @@ void MaaControllerDestroy(MaaControllerHandle ctrl)
         return;
     }
 
-    ctrl->post_stop();
+    ctrl->stop_notifier().stop();
     delete ctrl;
 }
 

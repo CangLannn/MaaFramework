@@ -17,6 +17,13 @@ ControllerAgent::ControllerAgent(
 {
     LogFunc << VAR_VOIDP(callback) << VAR_VOIDP(callback_arg);
 
+    stop_notifier_.set_is_running([this]() { return running(); });
+    stop_notifier_.set_on_stop([this]() {
+        if (action_runner_ && action_runner_->running()) {
+            action_runner_->clear();
+        }
+    });
+
     action_runner_ = std::make_unique<AsyncRunner<Action>>(std::bind(
         &ControllerAgent::run_action,
         this,
@@ -172,15 +179,9 @@ std::pair<int, int> ControllerAgent::get_resolution()
     return resolution_cache_;
 }
 
-void ControllerAgent::post_stop()
+StopNotifier& ControllerAgent::stop_notifier()
 {
-    LogFunc;
-
-    need_to_stop_ = true;
-
-    if (action_runner_ && action_runner_->running()) {
-        action_runner_->clear();
-    }
+    return stop_notifier_;
 }
 
 MaaBool ControllerAgent::running() const
@@ -264,7 +265,7 @@ bool ControllerAgent::stop_app(const std::string& package)
 
 MaaCtrlId ControllerAgent::post(Action action)
 {
-    if (!check_stop()) {
+    if (!stop_notifier_.idle()) {
         return MaaInvalidId;
     }
 
@@ -611,21 +612,6 @@ void ControllerAgent::append_recording(
     std::ofstream ofs(recording_path_, std::ios::app);
     ofs << info.to_string() << "\n";
     ofs.close();
-}
-
-bool ControllerAgent::check_stop()
-{
-    if (!need_to_stop_) {
-        return true;
-    }
-
-    if (running()) {
-        LogError << "stopping, ignore new post";
-        return false;
-    }
-
-    need_to_stop_ = false;
-    return true;
 }
 
 cv::Point ControllerAgent::rand_point(const cv::Rect& r)

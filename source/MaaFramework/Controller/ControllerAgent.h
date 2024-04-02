@@ -9,6 +9,7 @@
 #include "API/MaaTypes.h"
 #include "Base/AsyncRunner.hpp"
 #include "Base/MessageNotifier.hpp"
+#include "Base/StopNotifier.hpp"
 #include "Instance/InstanceInternalAPI.hpp"
 #include "Utils/NoWarningCVMat.hpp"
 
@@ -119,7 +120,7 @@ public:
     virtual std::pair<int, int> get_resolution() override;
 
 public:
-    virtual void post_stop() override;
+    virtual StopNotifier& stop_notifier() override;
 
 public:
     bool click(const cv::Rect& r);
@@ -186,7 +187,6 @@ private:
 
     MaaCtrlId post(Action action);
     void focus_id(MaaCtrlId id);
-    bool check_stop();
 
 private:
     static cv::Point rand_point(const cv::Rect& r);
@@ -207,7 +207,7 @@ private: // options
     bool set_recording(MaaOptionValue value, MaaOptionValueSize val_size);
 
 private:
-    bool need_to_stop_ = false;
+    StopNotifier stop_notifier_;
 
 private:
     static std::minstd_rand rand_engine_;
