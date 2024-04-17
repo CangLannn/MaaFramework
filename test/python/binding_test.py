@@ -62,8 +62,6 @@ class MyAction(CustomAction):
         context.touch_down(1, 100, 100, 0)
         context.touch_move(1, 200, 200, 0)
         context.touch_up(1)
-        colored = context.get_task_result("ColorMatch")
-        print(f"colored: {colored}")
         return True
 
     def stop(self) -> None:
@@ -78,7 +76,7 @@ async def main():
     version = Library.open(install_dir / "bin")
     print(f"MaaFw Version: {version}")
 
-    Toolkit.init_config()
+    Toolkit.init_option(install_dir / "bin")
 
     resource = Resource()
     print(f"resource: {hex(resource._handle)}")

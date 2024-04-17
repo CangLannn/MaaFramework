@@ -125,7 +125,7 @@ def draw(rois: list[Roimage]) -> None:
     cv2.imshow(win_name, img)
 
 # 左键裁剪ROI区域
-crop_start: Roimage | None = None # 相对 win_roimage ，正在裁剪的区域
+crop_start: Roimage = None # 相对 win_roimage ，正在裁剪的区域
 crop_end = Roimage(0, 0, 0, 0, win_roimage).getRoiInRoot()
 def crop(event, x, y, flags, param) -> None:
     global crop_start, crop_end
@@ -205,7 +205,7 @@ def trackbar_change(pos) -> None:
 # 标准化图片
 # -image 被标准化的图片
 def getStdSize(image) -> tuple[int, int]:
-    # https://github.com/MaaAssistantArknights/MaaFramework/blob/main/source/MaaFramework/Controller/ControllerAgent.cpp
+    # https://github.com/MaaXYZ/MaaFramework/blob/main/source/MaaFramework/Controller/ControllerAgent.cpp
     # bool ControllerMgr::check_and_calc_target_image_size(const cv::Mat& raw)
     cur_height, cur_width, _ = image.shape
     scale = cur_width / cur_height
@@ -243,7 +243,7 @@ def screenshot():
     return image
 
 # 获取标准化的 Roimage
-def getStdRoimage() -> Roimage | None:
+def getStdRoimage() -> Roimage:
     global file_name
     if len(files):
         file_name = files.pop(0)

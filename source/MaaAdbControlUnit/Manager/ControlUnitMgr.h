@@ -15,8 +15,11 @@ MAA_CTRL_UNIT_NS_BEGIN
 class ControlUnitMgr : public ControlUnitAPI
 {
 public:
-    ControlUnitMgr(std::filesystem::path adb_path, std::string adb_serial, MaaControllerCallback callback,
-                   MaaCallbackTransparentArg callback_arg);
+    ControlUnitMgr(
+        std::filesystem::path adb_path,
+        std::string adb_serial,
+        MaaControllerCallback callback,
+        MaaCallbackTransparentArg callback_arg);
     virtual ~ControlUnitMgr() override = default;
 
 public: // from ControlUnitAPI
@@ -47,7 +50,9 @@ public:
     void set_replacement(const UnitBase::Replacement& replacement);
 
     void set_touch_input_obj(std::shared_ptr<TouchInputBase> obj) { touch_input_ = std::move(obj); }
+
     void set_key_input_obj(std::shared_ptr<KeyInputBase> obj) { key_input_ = std::move(obj); }
+
     void set_screencap_obj(std::shared_ptr<ScreencapBase> obj) { screencap_ = std::move(obj); }
 
 private:

@@ -1,35 +1,42 @@
 #pragma once
 
 #include "Utils/JsonExt.hpp"
+#include "VisionBase.h"
 #include "VisionTypes.h"
 
 MAA_VISION_NS_BEGIN
 
+struct TemplateComparatorResult
+{
+    cv::Rect box {};
+    double score = 0.0;
+
+    MEO_JSONIZATION(box, score);
+};
+
 class TemplateComparator
+    : public VisionBase
+    , public RecoResultAPI<TemplateComparatorResult>
 {
 public:
-    struct Result
-    {
-        cv::Rect box {};
-        double score = 0.0;
-
-        MEO_JSONIZATION(box, score);
-    };
-    using ResultsVec = std::vector<Result>;
-
-public:
-    TemplateComparator() = default;
-
-    void set_param(TemplateComparatorParam param) { param_ = std::move(param); }
-    ResultsVec analyze(const cv::Mat& lhs, const cv::Mat& rhs) const;
+    TemplateComparator(
+        cv::Mat lhs,
+        cv::Mat rhs,
+        TemplateComparatorParam param,
+        std::string name = "");
 
 private:
-    ResultsVec foreach_rois(const cv::Mat& lhs, const cv::Mat& rhs) const;
-    void filter(ResultsVec& results, double threshold) const;
+    void analyze();
+    ResultsVec compare_all_rois() const;
+
+    void add_results(ResultsVec results, double threshold);
+    void cherry_pick();
 
     static double comp(const cv::Mat& lhs, const cv::Mat& rhs, int method);
 
-    TemplateComparatorParam param_;
+private:
+    const cv::Mat rhs_image_ = {};
+    const TemplateComparatorParam param_;
 };
 
 MAA_VISION_NS_END

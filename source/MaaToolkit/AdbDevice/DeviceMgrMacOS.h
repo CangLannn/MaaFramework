@@ -8,7 +8,9 @@
 
 MAA_TOOLKIT_NS_BEGIN
 
-class DeviceMgrMacOS : public SingletonHolder<DeviceMgrMacOS>, public DeviceMgr
+class DeviceMgrMacOS
+    : public SingletonHolder<DeviceMgrMacOS>
+    , public DeviceMgr
 {
     friend class SingletonHolder<DeviceMgrMacOS>;
 
@@ -17,7 +19,7 @@ public:
 
 public: // from DeviceMgr
     virtual std::vector<Device> find_device_impl() override;
-    virtual std::vector<Device> find_device_with_adb_impl(std::string_view adb_path) override;
+    virtual std::vector<Device> find_device_with_adb_impl(std::filesystem::path adb_path) override;
 
 private:
     DeviceMgrMacOS() = default;

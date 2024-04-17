@@ -1,5 +1,6 @@
 #include "DesktopDupScreencap.h"
 
+#include "HwndUtils.hpp"
 #include "Utils/ImageIo.h"
 #include "Utils/Logger.h"
 
@@ -29,7 +30,11 @@ std::optional<cv::Mat> DesktopDupScreencap::screencap()
         }
     }
 
-    return screencap_impl();
+    auto img = screencap_impl();
+    if (!img) {
+        return std::nullopt;
+    }
+    return bgra_to_bgr(*img);
 }
 
 bool DesktopDupScreencap::init()
@@ -38,8 +43,17 @@ bool DesktopDupScreencap::init()
 
     HRESULT ret = S_OK;
 
-    ret = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &d3d_device_,
-                            nullptr, &d3d_context_);
+    ret = D3D11CreateDevice(
+        nullptr,
+        D3D_DRIVER_TYPE_HARDWARE,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        D3D11_SDK_VERSION,
+        &d3d_device_,
+        nullptr,
+        &d3d_context_);
     if (FAILED(ret)) {
         LogError << "D3D11CreateDevice failed" << VAR(ret);
         return false;
@@ -159,7 +173,9 @@ std::optional<cv::Mat> DesktopDupScreencap::screencap_impl()
     });
 
     ID3D11Texture2D* raw_texture = nullptr;
-    ret = desktop_resource->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&raw_texture));
+    ret = desktop_resource->QueryInterface(
+        __uuidof(ID3D11Texture2D),
+        reinterpret_cast<void**>(&raw_texture));
     if (FAILED(ret)) {
         LogError << "QueryInterface ID3D11Texture2D failed" << VAR(ret);
         return std::nullopt;
@@ -187,7 +203,7 @@ std::optional<cv::Mat> DesktopDupScreencap::screencap_impl()
     OnScopeLeave([&]() { d3d_context_->Unmap(readable_texture_, 0); });
 
     cv::Mat mat(texture_desc_.Height, texture_desc_.Width, CV_8UC4, mapped.pData, mapped.RowPitch);
-    return mat.clone();
+    return mat;
 }
 
 MAA_CTRL_UNIT_NS_END

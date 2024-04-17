@@ -1,18 +1,16 @@
 import ctypes
 import ctypes.util
-import pathlib
 import os
+import pathlib
 import platform
-from typing import Union, Optional
+from typing import Optional, Union
 
-from .define import MaaStringView
+from .define import *
 
 
 class Library:
     @classmethod
-    def open(
-        cls, path: Union[pathlib.Path, str], toolkit: bool = True
-    ) -> Optional[str]:
+    def open(cls, path: Union[pathlib.Path, str]) -> Optional[str]:
         """
         Open the library at the given path.
 
@@ -42,23 +40,18 @@ class Library:
             cls.framework_libpath = ctypes.util.find_library("MaaFramework")
             cls.framework = lib_import(str(cls.framework_libpath))
 
-        if not cls.framework:
+        try:
+            cls.toolkit_libpath = pathlib.Path(path) / platform_values[platform_type][1]
+            cls.toolkit = lib_import(str(cls.toolkit_libpath))
+        except OSError:
+            cls.toolkit_libpath = ctypes.util.find_library("MaaToolkit")
+            cls.toolkit = lib_import(str(cls.toolkit_libpath))
+
+        if not cls.framework or not cls.toolkit:
             cls.initialized = False
             return None
 
-        if toolkit:
-            try:
-                cls.toolkit_libpath = (
-                    pathlib.Path(path) / platform_values[platform_type][1]
-                )
-                cls.toolkit = lib_import(str(cls.toolkit_libpath))
-            except OSError:
-                cls.toolkit_libpath = ctypes.util.find_library("MaaToolkit")
-                cls.toolkit = lib_import(str(cls.toolkit_libpath))
-        else:
-            cls.toolkit = None
-            cls.toolkit_libpath = None
-
+        cls._set_api_properties()
         cls.initialized = True
 
         return cls.version()
@@ -76,7 +69,9 @@ class Library:
                 "Library not initialized, please call `library.open()` first."
             )
 
+        return cls.framework.MaaVersion().decode("utf-8")
+
+    @classmethod
+    def _set_api_properties(cls):
         cls.framework.MaaVersion.restype = MaaStringView
         cls.framework.MaaVersion.argtypes = None
-
-        return cls.framework.MaaVersion().decode("utf-8")

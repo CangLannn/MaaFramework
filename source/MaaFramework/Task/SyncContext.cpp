@@ -3,13 +3,17 @@
 #include <meojson/json.hpp>
 
 #include "Controller/ControllerAgent.h"
-#include "Instance/InstanceStatus.h"
 #include "PipelineTask.h"
+#include "Task/Actuator.h"
+#include "Task/Recognizer.h"
 #include "Utils/Logger.h"
 
 MAA_TASK_NS_BEGIN
 
-SyncContext::SyncContext(InstanceInternalAPI* inst) : inst_(inst) {}
+SyncContext::SyncContext(InstanceInternalAPI* inst)
+    : inst_(inst)
+{
+}
 
 bool SyncContext::run_task(std::string task, std::string_view param)
 {
@@ -32,8 +36,12 @@ bool SyncContext::run_task(std::string task, std::string_view param)
     return pipeline.run();
 }
 
-bool SyncContext::run_recognizer(cv::Mat image, std::string task, std::string_view param, cv::Rect& box,
-                                 std::string& detail)
+bool SyncContext::run_recognizer(
+    cv::Mat image,
+    std::string task,
+    std::string_view param,
+    cv::Rect& box,
+    std::string& detail)
 {
     LogFunc << VAR(task) << VAR(param);
 
@@ -42,6 +50,10 @@ bool SyncContext::run_recognizer(cv::Mat image, std::string task, std::string_vi
 
     if (!inst_) {
         LogError << "Instance is null";
+        return false;
+    }
+    if (image.empty()) {
+        LogError << "Image is empty";
         return false;
     }
 
@@ -57,17 +69,19 @@ bool SyncContext::run_recognizer(cv::Mat image, std::string task, std::string_vi
     data_mgr.set_param(*json_opt);
     const auto& task_data = data_mgr.get_task_data(task);
 
-    auto opt = recognizer.recognize(image, task_data);
-    if (!opt) {
-        return false;
-    }
+    auto reco = recognizer.recognize(image, task_data);
 
-    box = opt->box;
-    detail = opt->detail.to_string();
-    return true;
+    box = *reco.hit;
+    detail = reco.detail.to_string();
+
+    return reco.hit.has_value();
 }
 
-bool SyncContext::run_action(std::string task, std::string_view param, cv::Rect cur_box, std::string cur_detail)
+bool SyncContext::run_action(
+    std::string task,
+    std::string_view param,
+    cv::Rect cur_box,
+    std::string cur_detail)
 {
     LogFunc << VAR(task) << VAR(param);
 
@@ -84,13 +98,13 @@ bool SyncContext::run_action(std::string task, std::string_view param, cv::Rect 
 
     Actuator actuator(inst_);
 
-    Recognizer::Result rec_result { .box = cur_box, .detail = std::move(cur_detail) };
+    Recognizer::Hit reco_hit = cur_box;
 
     TaskDataMgr data_mgr(inst_);
     data_mgr.set_param(*json_opt);
     const auto& task_data = data_mgr.get_task_data(task);
 
-    auto ret = actuator.run(rec_result, task_data);
+    auto ret = actuator.run(reco_hit, json::parse(cur_detail).value_or(cur_detail), task_data);
     return ret;
 }
 
@@ -204,16 +218,6 @@ cv::Mat SyncContext::screencap()
     ctrl->wait(id);
 
     return ctrl->get_image();
-}
-
-json::value SyncContext::task_result(const std::string& task_name) const
-{
-    if (!status()) {
-        LogError << "Instance status is null";
-        return {};
-    }
-
-    return status()->get_task_result(task_name);
 }
 
 MAA_TASK_NS_END

@@ -1,11 +1,13 @@
-from ctypes import c_int32
-from abc import ABC
-from typing import Any, Dict, Optional, Union
-from pathlib import Path
 import json
+from abc import ABC
+from ctypes import c_int32
+import os
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
 
-from .custom_controller import CustomControllerAgent
+from .buffer import ImageBuffer
 from .callback_agent import Callback, CallbackAgent
+from .custom_controller import CustomControllerAgent
 from .define import *
 from .future import Future
 from .library import Library
@@ -47,15 +49,15 @@ class Controller(ABC):
 
     async def connect(self) -> bool:
         """
-        Async connect to the controller.
+        Async connect.
 
         :return: True if the connection was successful, False otherwise.
         """
-        await self.post_connection().wait()
+        return await self.post_connection().wait()
 
     def post_connection(self) -> Future:
         """
-        Post a connection to the controller. (connect in backgroud)
+        Post a connection. (connect in backgroud)
 
         :return: The connection ID.
         """
@@ -73,33 +75,93 @@ class Controller(ABC):
 
         return bool(Library.framework.MaaControllerConnected(self._handle))
 
+    async def screencap(self, capture: bool = True) -> Optional[numpy.ndarray]:
+        """
+        Async capture the screenshot.
+
+        :param capture: Whether to capture the screen, if False, the last screenshot will be returned.
+        :return: image
+        """
+        if capture:
+            captured = await self.post_screencap().wait()
+            if not captured:
+                return None
+
+        image_buffer = ImageBuffer()
+        ret = Library.framework.MaaControllerGetImage(
+            self._handle, image_buffer.c_handle
+        )
+        if not ret:
+            return None
+        return image_buffer.get()
+
+    def post_screencap(self) -> Future:
+        """
+        Post a screencap. (get screencap in backgroud)
+
+        :return: The screencap ID.
+        """
+
+        maaid = Library.framework.MaaControllerPostScreencap(self._handle)
+        return Future(maaid, self._status)
+
+    async def click(self, x: int, y: int) -> bool:
+        """
+        Async click on the controller.
+
+        :param x: The x coordinate.
+        :param y: The y coordinate.
+        :return: True if the click was successful, False otherwise.
+        """
+
+        return await self.post_click(x, y).wait()
+
+    def post_click(self, x: int, y: int) -> Future:
+        """
+        Post a click. (click in backgroud)
+
+        :param x: The x coordinate.
+        :param y: The y coordinate.
+        :return: The click ID.
+        """
+        maaid = Library.framework.MaaControllerPostClick(self._handle, x, y)
+        return Future(maaid, self._status)
+
+    def set_screenshot_target_long_side(self, long_side: int) -> "Controller":
+        """
+        Set the screenshot target long side.
+
+        :param long_side: The long side of the screenshot.
+        """
+
+        cint = ctypes.c_int32(long_side)
+        Library.framework.MaaControllerSetOption(
+            self._handle,
+            MaaCtrlOptionEnum.ScreenshotTargetLongSide,
+            ctypes.pointer(cint),
+            ctypes.sizeof(ctypes.c_int32),
+        )
+        return self
+
+    def set_screenshot_target_short_side(self, short_side: int) -> "Controller":
+        """
+        Set the screenshot target short side.
+
+        :param short_side: The short side of the screenshot.
+        """
+        cint = ctypes.c_int32(short_side)
+        Library.framework.MaaControllerSetOption(
+            self._handle,
+            MaaCtrlOptionEnum.ScreenshotTargetShortSide,
+            ctypes.pointer(cint),
+            ctypes.sizeof(ctypes.c_int32),
+        )
+        return self
+
     def _status(self, maaid: int) -> MaaStatus:
         return Library.framework.MaaControllerStatus(self._handle, maaid)
 
     _api_properties_initialized: bool = False
-
-    # TODO: 进一步优化 set_option？
-    def set_option(self, key: MaaCtrlOptionEnum, value: MaaOptionValue) -> bool:
-        if (
-            key == MaaCtrlOptionEnum.ScreenshotTargetLongSide
-            or key == MaaCtrlOptionEnum.ScreenshotTargetShortSide
-        ):
-            size = ctypes.sizeof(ctypes.c_int32)
-        elif (
-            key == MaaCtrlOptionEnum.DefaultAppPackage
-            or key == MaaCtrlOptionEnum.DefaultAppPackageEntry
-        ):
-            size = ctypes.sizeof(ctypes.c_bool)
-        elif key == MaaCtrlOptionEnum.Recording:
-            size = ctypes.sizeof(ctypes.c_bool)
-        elif key == MaaCtrlOptionEnum.Invalid:
-            size = 0
-        else:
-            raise ValueError(f"Unsupported option: {key}")
-
-        return bool(
-            Library.framework.MaaControllerSetOption(self._handle, key, ctypes.pointer(value), size)
-        )
 
     @staticmethod
     def _set_api_properties():
@@ -133,8 +195,53 @@ class Controller(ABC):
         Library.framework.MaaControllerConnected.restype = MaaBool
         Library.framework.MaaControllerConnected.argtypes = [MaaControllerHandle]
 
+        Library.framework.MaaControllerPostClick.restype = MaaCtrlId
+        Library.framework.MaaControllerPostClick.argtypes = [
+            MaaControllerHandle,
+            c_int32,
+            c_int32,
+        ]
+
+        Library.framework.MaaControllerPostSwipe.restype = MaaCtrlId
+        Library.framework.MaaControllerPostSwipe.argtypes = [
+            MaaControllerHandle,
+            c_int32,
+            c_int32,
+            c_int32,
+            c_int32,
+            c_int32,
+        ]
+
+        Library.framework.MaaControllerPostPressKey.restype = MaaCtrlId
+        Library.framework.MaaControllerPostPressKey.argtypes = [
+            MaaControllerHandle,
+            c_int32,
+        ]
+
+        Library.framework.MaaControllerPostInputText.restype = MaaCtrlId
+        Library.framework.MaaControllerPostInputText.argtypes = [
+            MaaControllerHandle,
+            MaaStringView,
+        ]
+
+        Library.framework.MaaControllerPostScreencap.restype = MaaCtrlId
+        Library.framework.MaaControllerPostScreencap.argtypes = [
+            MaaControllerHandle,
+        ]
+
+        Library.framework.MaaControllerGetImage.restype = MaaBool
+        Library.framework.MaaControllerGetImage.argtypes = [
+            MaaControllerHandle,
+            MaaImageBufferHandle,
+        ]
+
 
 class AdbController(Controller):
+    AGENT_BINARY_PATH = os.path.join(
+        os.path.dirname(__file__),
+        "../MaaAgentBinary",
+    )
+
     def __init__(
         self,
         adb_path: Union[str, Path],
@@ -144,7 +251,7 @@ class AdbController(Controller):
             | MaaAdbControllerTypeEnum.Screencap_FastestWay
         ),
         config: Dict[str, Any] = {},
-        agent_path: Union[str, Path] = "share/MaaAgentBinary",
+        agent_path: Union[str, Path] = AGENT_BINARY_PATH,
         callback: Optional[Callback] = None,
         callback_arg: Any = None,
     ):
@@ -153,8 +260,8 @@ class AdbController(Controller):
 
         :param adb_path: The path to the ADB executable.
         :param address: The address of the device.
-        :param type: The type of the controller.
-        :param config: The configuration of the controller.
+        :param type: The type.
+        :param config: The configuration.
         :param callback: The callback function.
         :param callback_arg: The callback argument.
         """

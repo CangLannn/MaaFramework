@@ -5,62 +5,81 @@
 
 #include "Conf/Conf.h"
 
-MAA_SUPPRESS_CV_WARNINGS_BEGIN
-#include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
-#include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
-#include "fastdeploy/vision/ocr/ppocr/recognizer.h"
-MAA_SUPPRESS_CV_WARNINGS_END
-
 #include "Utils/Codec.h"
 #include "Utils/JsonExt.hpp"
 #include "VisionBase.h"
 #include "VisionTypes.h"
 
+namespace fastdeploy
+{
+namespace vision::ocr
+{
+class DBDetector;
+class Recognizer;
+}
+
+namespace pipeline
+{
+class PPOCRv3;
+}
+}
+
 MAA_VISION_NS_BEGIN
 
-class OCRer : public VisionBase
+struct OCRerResult
+{
+    std::wstring text;
+    cv::Rect box {};
+    double score = 0.0;
+
+    MEO_JSONIZATION(text, box, score);
+};
+
+class OCRer
+    : public VisionBase
+    , public RecoResultAPI<OCRerResult>
 {
 public:
-    struct Result
-    {
-        std::wstring text;
-        cv::Rect box {};
-        double score = 0.0;
-
-        MEO_JSONIZATION(text, box, score);
-    };
-    using ResultsVec = std::vector<Result>;
+    using Cache = std::map<cv::Rect, ResultsVec, RectComparator>;
 
 public:
-    void set_session(std::shared_ptr<fastdeploy::vision::ocr::DBDetector> deter,
-                     std::shared_ptr<fastdeploy::vision::ocr::Recognizer> recer,
-                     std::shared_ptr<fastdeploy::pipeline::PPOCRv3> ocrer)
-    {
-        deter_ = std::move(deter);
-        recer_ = std::move(recer);
-        ocrer_ = std::move(ocrer);
-    }
-    void set_param(OCRerParam param) { param_ = std::move(param); }
-    std::pair<ResultsVec, size_t> analyze() const;
+    OCRer(
+        cv::Mat image,
+        OCRerParam param,
+        std::shared_ptr<fastdeploy::vision::ocr::DBDetector> deter,
+        std::shared_ptr<fastdeploy::vision::ocr::Recognizer> recer,
+        std::shared_ptr<fastdeploy::pipeline::PPOCRv3> ocrer,
+        Cache& cache,
+        std::string name = "");
 
 private:
-    ResultsVec foreach_rois() const;
-    ResultsVec predict(const cv::Rect& roi) const;
-    ResultsVec predict_det_and_rec(const cv::Rect& roi) const;
-    Result predict_only_rec(const cv::Rect& roi) const;
-    void draw_result(const cv::Rect& roi, const ResultsVec& results) const;
+    void analyze();
 
-    void postproc_and_filter(ResultsVec& results, const std::vector<std::wstring>& expected) const;
+    ResultsVec predict_all_rois() const;
+    ResultsVec predict(const cv::Rect& roi) const;
+
+    void add_results(ResultsVec results, const std::vector<std::wstring>& expected);
+    void cherry_pick();
+
+private:
+    ResultsVec predict_det_and_rec(const cv::Mat& image_roi) const;
+    Result predict_only_rec(const cv::Mat& image_roi) const;
+
+    cv::Mat draw_result(const cv::Rect& roi, const ResultsVec& results) const;
+
     void postproc_trim_(Result& res) const;
     void postproc_replace_(Result& res) const;
     bool filter_by_required(const Result& res, const std::vector<std::wstring>& expected) const;
-    void sort(ResultsVec& results) const;
-    size_t preferred_index(const ResultsVec& results) const;
+    void sort_(ResultsVec& results) const;
 
-    OCRerParam param_;
+private:
+    const OCRerParam param_;
+
     std::shared_ptr<fastdeploy::vision::ocr::DBDetector> deter_ = nullptr;
     std::shared_ptr<fastdeploy::vision::ocr::Recognizer> recer_ = nullptr;
     std::shared_ptr<fastdeploy::pipeline::PPOCRv3> ocrer_ = nullptr;
+
+    Cache& cache_;
 };
 
 MAA_VISION_NS_END

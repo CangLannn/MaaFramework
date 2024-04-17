@@ -15,11 +15,6 @@
 #define MAA_VISION_HAS_XFEATURES2D
 #endif
 
-namespace Ort
-{
-struct Session;
-}
-
 MAA_VISION_NS_BEGIN
 
 enum class ResultOrderBy
@@ -28,13 +23,14 @@ enum class ResultOrderBy
     Vertical,
     Score,
     Area,
-    Length, // for OCR
+    Length,   // for OCR
     Random,
     Expected, // TODO
 };
 
 struct DirectHitParam
-{};
+{
+};
 
 struct TemplateMatcherParam
 {
@@ -56,7 +52,7 @@ struct OCRerParam
     std::string model;
     bool only_rec = false;
     std::vector<cv::Rect> roi;
-    std::vector<std::wstring> text;
+    std::vector<std::wstring> expected;
     std::vector<std::pair<std::wstring, std::wstring>> replace;
 
     ResultOrderBy order_by = ResultOrderBy::Horizontal;
@@ -151,7 +147,7 @@ struct FeatureMatcherParam
     inline static constexpr int kDefaultCount = 4;
 
     std::vector<cv::Rect> roi;
-    std::string template_path;
+    std::vector<std::string> template_paths;
     bool green_mask = false;
 
     Detector detector = kDefaultDetector;
@@ -191,5 +187,25 @@ inline std::ostream& operator<<(std::ostream& os, const ResultOrderBy& order_by)
     }
     return os;
 }
+
+struct RectComparator
+{
+    bool operator()(const cv::Rect& lhs, const cv::Rect& rhs) const
+    {
+        if (lhs.x != rhs.x) {
+            return lhs.x < rhs.x;
+        }
+        if (lhs.y != rhs.y) {
+            return lhs.y < rhs.y;
+        }
+        if (lhs.width != rhs.width) {
+            return lhs.width < rhs.width;
+        }
+        if (lhs.height != rhs.height) {
+            return lhs.height < rhs.height;
+        }
+        return false;
+    }
+};
 
 MAA_VISION_NS_END

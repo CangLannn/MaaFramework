@@ -8,8 +8,8 @@
 
 #include "API/MaaTypes.h"
 #include "Base/AsyncRunner.hpp"
-#include "Base/MessageNotifier.hpp"
 #include "Instance/InstanceInternalAPI.hpp"
+#include "Utils/MessageNotifier.hpp"
 #include "Utils/NoWarningCVMat.hpp"
 
 MAA_RES_NS_BEGIN
@@ -23,6 +23,7 @@ struct ClickParam
     int x = 0;
     int y = 0;
 };
+
 struct SwipeParam
 {
     int x1 = 0;
@@ -31,6 +32,7 @@ struct SwipeParam
     int y2 = 0;
     int duration = 0;
 };
+
 struct TouchParam
 {
     int contact = 0;
@@ -38,20 +40,30 @@ struct TouchParam
     int y = 0;
     int pressure = 0;
 };
+
 struct PressKeyParam
 {
     int keycode = 0;
 };
+
 struct InputTextParam
 {
     std::string text;
 };
+
 struct AppParam
 {
     std::string package;
 };
 
-using Param = std::variant<std::monostate, ClickParam, SwipeParam, TouchParam, PressKeyParam, InputTextParam, AppParam>;
+using Param = std::variant<
+    std::monostate,
+    ClickParam,
+    SwipeParam,
+    TouchParam,
+    PressKeyParam,
+    InputTextParam,
+    AppParam>;
 
 struct Action
 {
@@ -83,7 +95,8 @@ public:
 
     virtual ~ControllerAgent() override;
 
-    virtual bool set_option(MaaCtrlOption key, MaaOptionValue value, MaaOptionValueSize val_size) override;
+    virtual bool
+        set_option(MaaCtrlOption key, MaaOptionValue value, MaaOptionValueSize val_size) override;
 
     virtual MaaCtrlId post_connection() override;
     virtual MaaCtrlId post_click(int x, int y) override;
@@ -99,12 +112,14 @@ public:
     virtual MaaStatus status(MaaCtrlId ctrl_id) const override;
     virtual MaaStatus wait(MaaCtrlId ctrl_id) const override;
     virtual MaaBool connected() const override;
+    virtual MaaBool running() const override;
 
     virtual cv::Mat get_image() override;
     virtual std::string get_uuid() override;
     virtual std::pair<int, int> get_resolution() override;
 
-    virtual void on_stop() override;
+public:
+    virtual void post_stop() override;
 
 public:
     bool click(const cv::Rect& r);
@@ -139,6 +154,17 @@ protected:
     MessageNotifier<MaaControllerCallback> notifier;
 
 private:
+    MaaCtrlId post_connection_impl();
+    MaaCtrlId post_click_impl(int x, int y);
+    MaaCtrlId post_swipe_impl(int x1, int y1, int x2, int y2, int duration);
+    MaaCtrlId post_press_key_impl(int keycode);
+    MaaCtrlId post_input_text_impl(std::string_view text);
+    MaaCtrlId post_screencap_impl();
+
+    MaaCtrlId post_touch_down_impl(int contact, int x, int y, int pressure);
+    MaaCtrlId post_touch_move_impl(int contact, int x, int y, int pressure);
+    MaaCtrlId post_touch_up_impl(int contact);
+
     bool handle_connect();
     bool handle_click(const ClickParam& param);
     bool handle_swipe(const SwipeParam& param);
@@ -153,7 +179,14 @@ private:
 
     bool recording() const;
     void init_recording();
-    void append_recording(json::value info, const std::chrono::steady_clock::time_point& start_time, bool success);
+    void append_recording(
+        json::value info,
+        const std::chrono::steady_clock::time_point& start_time,
+        bool success);
+
+    MaaCtrlId post(Action action);
+    void focus_id(MaaCtrlId id);
+    bool check_stop();
 
 private:
     static cv::Point rand_point(const cv::Rect& r);
@@ -174,7 +207,7 @@ private: // options
     bool set_recording(MaaOptionValue value, MaaOptionValueSize val_size);
 
 private:
-    // InstanceInternalAPI* inst_ = nullptr;
+    bool need_to_stop_ = false;
 
 private:
     static std::minstd_rand rand_engine_;
@@ -197,8 +230,8 @@ private:
     bool recording_ = false;
     std::filesystem::path recording_path_;
 
-    std::set<AsyncRunner<Action>::Id> post_ids_;
-    std::mutex post_ids_mutex_;
+    std::set<AsyncRunner<Action>::Id> focus_ids_;
+    std::mutex focus_ids_mutex_;
     std::unique_ptr<AsyncRunner<Action>> action_runner_ = nullptr;
 };
 

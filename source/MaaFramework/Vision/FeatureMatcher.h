@@ -15,49 +15,67 @@ MAA_SUPPRESS_CV_WARNINGS_END
 
 MAA_VISION_NS_BEGIN
 
-class FeatureMatcher : public VisionBase
+struct FeatureMatcherResult
+{
+    cv::Rect box {};
+    int count = 0;
+
+    MEO_JSONIZATION(box, count);
+};
+
+class FeatureMatcher
+    : public VisionBase
+    , public RecoResultAPI<FeatureMatcherResult>
 {
 public:
-    struct Result
-    {
-        cv::Rect box {};
-        int count = 0;
-
-        MEO_JSONIZATION(box, count);
-    };
-
-    using ResultsVec = std::vector<Result>;
-
-public:
-    void set_template(std::shared_ptr<cv::Mat> templ) { template_ = std::move(templ); }
-    void set_param(FeatureMatcherParam param) { param_ = std::move(param); }
-
-    std::pair<ResultsVec, size_t> analyze() const;
+    FeatureMatcher(
+        cv::Mat image,
+        FeatureMatcherParam param,
+        std::vector<std::shared_ptr<cv::Mat>> templates,
+        std::string name = "");
 
 private:
-    ResultsVec foreach_rois(const cv::Mat& templ) const;
-    ResultsVec match_roi(const std::vector<cv::KeyPoint>& keypoints_1, const cv::Mat& descriptors_1,
-                         const cv::Rect& roi_2) const;
+    void analyze();
+    ResultsVec match_all_rois(const cv::Mat& templ) const;
+    ResultsVec feature_match(
+        const cv::Mat& templ,
+        const std::vector<cv::KeyPoint>& keypoints_1,
+        const cv::Mat& descriptors_1,
+        const cv::Rect& roi_2) const;
 
+    void add_results(ResultsVec results, int count);
+    void cherry_pick();
+
+private:
     cv::Ptr<cv::Feature2D> create_detector() const;
-    std::pair<std::vector<cv::KeyPoint>, cv::Mat> detect(const cv::Mat& image, const cv::Mat& mask) const;
+    std::pair<std::vector<cv::KeyPoint>, cv::Mat>
+        detect(const cv::Mat& image, const cv::Mat& mask) const;
 
     cv::Ptr<cv::DescriptorMatcher> create_matcher() const;
-    std::vector<std::vector<cv::DMatch>> match(const cv::Mat& descriptors_1, const cv::Mat& descriptors_2) const;
+    std::vector<std::vector<cv::DMatch>>
+        match(const cv::Mat& descriptors_1, const cv::Mat& descriptors_2) const;
 
-    ResultsVec postproc(const std::vector<std::vector<cv::DMatch>>& match_points,
-                        const std::vector<cv::KeyPoint>& keypoints_1, const std::vector<cv::KeyPoint>& keypoints_2,
-                        const cv::Rect& roi_2) const;
+    ResultsVec feature_postproc(
+        const std::vector<std::vector<cv::DMatch>>& match_points,
+        const std::vector<cv::KeyPoint>& keypoints_1,
+        const std::vector<cv::KeyPoint>& keypoints_2,
+        int templ_cols,
+        int templ_rows,
+        std::vector<cv::DMatch>& good_matches) const;
 
-    void draw_result(const cv::Mat& templ, const std::vector<cv::KeyPoint>& keypoints_1, const cv::Rect& roi,
-                     const std::vector<cv::KeyPoint>& keypoints_2, const std::vector<cv::DMatch>& good_matches,
-                     ResultsVec& results) const;
-    void filter(ResultsVec& results, int count) const;
-    void sort(ResultsVec& results) const;
-    size_t preferred_index(const ResultsVec& results) const;
+    cv::Mat draw_result(
+        const cv::Mat& templ,
+        const std::vector<cv::KeyPoint>& keypoints_1,
+        const cv::Rect& roi,
+        const std::vector<cv::KeyPoint>& keypoints_2,
+        const std::vector<cv::DMatch>& good_matches,
+        const ResultsVec& results) const;
 
-    FeatureMatcherParam param_;
-    std::shared_ptr<cv::Mat> template_;
+    void sort_(ResultsVec& results) const;
+
+private:
+    const FeatureMatcherParam param_;
+    const std::vector<std::shared_ptr<cv::Mat>> templates_;
 };
 
 MAA_VISION_NS_END

@@ -1,53 +1,61 @@
 #include "Utils/IOStream/ChildPipeIOStream.h"
 
+#include "Utils/Codec.h"
 #include "Utils/Logger.h"
 
 MAA_NS_BEGIN
 
 #ifdef _WIN32
-struct prevent_inherit : boost::process::extend::handler
+std::vector<std::wstring> conv_args(const std::vector<std::string>& args)
 {
-    template <typename Char, typename Sequence>
-    void on_setup(boost::process::extend::windows_executor<Char, Sequence>& exec)
-    {
-        SIZE_T size = 0;
-        InitializeProcThreadAttributeList(NULL, 1, 0, &size);
-        auto attrlist = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(HeapAlloc(GetProcessHeap(), 0, size));
-        InitializeProcThreadAttributeList(attrlist, 1, 0, &size);
-        HANDLE empty[1] = {};
-        UpdateProcThreadAttribute(attrlist, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, empty, 0, NULL, NULL);
-        exec.startup_info_ex.lpAttributeList = attrlist;
+    std::vector<std::wstring> wargs;
+    for (const auto& arg : args) {
+        wargs.emplace_back(to_u16(arg));
     }
-
-    template <typename Char, typename Sequence>
-    void on_error(boost::process::extend::windows_executor<Char, Sequence>& exec, const std::error_code&) const
-    {
-        if (exec.startup_info_ex.lpAttributeList) {
-            HeapFree(GetProcessHeap(), 0, exec.startup_info_ex.lpAttributeList);
-        }
-    }
-
-    template <typename Char, typename Sequence>
-    void on_success(boost::process::extend::windows_executor<Char, Sequence>& exec) const
-    {
-        if (exec.startup_info_ex.lpAttributeList) {
-            HeapFree(GetProcessHeap(), 0, exec.startup_info_ex.lpAttributeList);
-        }
-    }
-};
+    return wargs;
+}
+#else
+std::vector<std::string> conv_args(const std::vector<std::string>& args)
+{
+    return args;
+}
 #endif
 
-ChildPipeIOStream::ChildPipeIOStream(const std::filesystem::path& exec, const std::vector<std::string>& args)
-    : child_( //
-          exec, args, boost::process::std_out > pin_, boost::process::std_err > boost::process::null,
+ChildPipeIOStream::ChildPipeIOStream(
+    const std::filesystem::path& exec,
+    const std::vector<std::string>& args)
+    : ChildPipeIOStream(exec, conv_args(args), false)
+{
+}
+
+#ifdef _WIN32
+ChildPipeIOStream::ChildPipeIOStream(
+    const std::filesystem::path& exec,
+    const std::vector<std::wstring>& wargs)
+    : ChildPipeIOStream(exec, wargs, false)
+{
+}
+#endif
+
+ChildPipeIOStream::ChildPipeIOStream(
+    const std::filesystem::path& exec,
+    const std::vector<os_string>& args,
+    bool)
+    : exec_(exec)
+    , args_(args)
+    , child_(
+          exec_,
+          args_,
+          boost::process::std_out > pin_,
+          boost::process::std_err > boost::process::null,
           boost::process::std_in < pout_
 #ifdef _WIN32
           ,
-          prevent_inherit(), boost::process::windows::create_no_window
+          boost::process::windows::create_no_window
 #endif
       )
 {
-    LogTrace << VAR(exec) << VAR(args) << VAR(child_.id());
+    LogTrace << VAR(exec_) << VAR(args_) << VAR(child_.id());
 }
 
 ChildPipeIOStream::~ChildPipeIOStream()
@@ -58,7 +66,7 @@ ChildPipeIOStream::~ChildPipeIOStream()
 bool ChildPipeIOStream::write(std::string_view data)
 {
     if (!pout_.good()) {
-        LogError << "pout is not good";
+        LogError << "pout is not good" << VAR(exec_) << VAR(args_) << VAR(child_.id());
         return false;
     }
 
@@ -84,7 +92,7 @@ bool ChildPipeIOStream::release()
     int code = child_.exit_code();
 
     if (code != 0) {
-        LogError << "child exit with" << code << VAR(child_.id());
+        LogWarn << "child exit with" << code << VAR(exec_) << VAR(args_) << VAR(child_.id());
         return false;
     }
 

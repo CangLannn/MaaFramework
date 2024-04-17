@@ -1,8 +1,9 @@
 #include "Recognizer.h"
 
-#include "Instance/InstanceStatus.h"
-#include "Option/GlobalOptionMgr.h"
+#include "Global/GlobalOptionMgr.h"
+#include "Global/UniqueResultBank.h"
 #include "Resource/ResourceMgr.h"
+#include "Utils/ImageIo.h"
 #include "Utils/Logger.h"
 #include "Vision/ColorMatcher.h"
 #include "Vision/CustomRecognizer.h"
@@ -15,34 +16,39 @@
 
 MAA_TASK_NS_BEGIN
 
-Recognizer::Recognizer(InstanceInternalAPI* inst) : inst_(inst) {}
+Recognizer::Recognizer(InstanceInternalAPI* inst)
+    : inst_(inst)
+{
+}
 
-std::optional<Recognizer::Result> Recognizer::recognize(const cv::Mat& image, const TaskData& task_data)
+Recognizer::Result Recognizer::recognize(const cv::Mat& image, const TaskData& task_data)
 {
     using namespace MAA_RES_NS::Recognition;
     using namespace MAA_VISION_NS;
 
-    if (!status()) {
-        LogError << "Status not binded";
-        return std::nullopt;
-    }
-
-    std::optional<Result> result;
+    Result result;
     switch (task_data.rec_type) {
     case Type::DirectHit:
         result = direct_hit(task_data.name);
         break;
 
     case Type::TemplateMatch:
-        result = template_match(image, std::get<TemplateMatcherParam>(task_data.rec_param), task_data.name);
+        result = template_match(
+            image,
+            std::get<TemplateMatcherParam>(task_data.rec_param),
+            task_data.name);
         break;
 
     case Type::FeatureMatch:
-        result = feature_match(image, std::get<FeatureMatcherParam>(task_data.rec_param), task_data.name);
+        result = feature_match(
+            image,
+            std::get<FeatureMatcherParam>(task_data.rec_param),
+            task_data.name);
         break;
 
     case Type::ColorMatch:
-        result = color_match(image, std::get<ColorMatcherParam>(task_data.rec_param), task_data.name);
+        result =
+            color_match(image, std::get<ColorMatcherParam>(task_data.rec_param), task_data.name);
         break;
 
     case Type::OCR:
@@ -50,57 +56,113 @@ std::optional<Recognizer::Result> Recognizer::recognize(const cv::Mat& image, co
         break;
 
     case Type::NeuralNetworkClassify:
-        result = classify(image, std::get<NeuralNetworkClassifierParam>(task_data.rec_param), task_data.name);
+        result = nn_classify(
+            image,
+            std::get<NeuralNetworkClassifierParam>(task_data.rec_param),
+            task_data.name);
         break;
 
     case Type::NeuralNetworkDetect:
-        result = detect(image, std::get<NeuralNetworkDetectorParam>(task_data.rec_param), task_data.name);
+        result = nn_detect(
+            image,
+            std::get<NeuralNetworkDetectorParam>(task_data.rec_param),
+            task_data.name);
         break;
 
     case Type::Custom:
-        result = custom_recognize(image, std::get<CustomRecognizerParam>(task_data.rec_param), task_data.name);
+        result = custom_recognize(
+            image,
+            std::get<CustomRecognizerParam>(task_data.rec_param),
+            task_data.name);
         break;
 
     default:
-        LogError << "Unknown type" << VAR(static_cast<int>(task_data.rec_type)) << VAR(task_data.name);
-        return std::nullopt;
+        LogError << "Unknown type" << VAR(static_cast<int>(task_data.rec_type))
+                 << VAR(task_data.name);
+        return {};
     }
 
-    if (result) {
-        status()->set_rec_box(task_data.name, result->box);
-        status()->set_rec_detail(task_data.name, result->detail);
+    save_draws(task_data.name, result);
+    UniqueResultBank::get_instance().add_reco_detail(result.uid, result);
 
-        show_hit_draw(image, *result, task_data.name);
+    if (result.hit) {
+        const auto& hit = *result.hit;
+        show_hit_draw(image, hit, task_data.name, result.uid);
     }
 
     if (task_data.inverse) {
-        LogDebug << "task_data.inverse is true, reverse the result" << VAR(task_data.name) << VAR(result.has_value());
-        return result ? std::nullopt : std::make_optional(Result { .box = cv::Rect() });
+        LogDebug << "task_data.inverse is true, reverse the result" << VAR(task_data.name)
+                 << VAR(result.hit.has_value());
+
+        if (result.hit) {
+            result.hit = std::nullopt;
+        }
+        else {
+            result.hit = Hit {};
+        }
     }
+
     return result;
 }
 
-std::optional<Recognizer::Result> Recognizer::direct_hit(const std::string& name)
+bool Recognizer::query_detail(
+    MaaRecoId reco_id,
+    bool& hit,
+    cv::Rect& box,
+    std::string& detail,
+    std::vector<cv::Mat>& draws)
 {
-    LogTrace << name;
-    return Result { .box = cv::Rect(), .detail = json::array() };
+    std::any res_any = UniqueResultBank::get_instance().get_reco_detail(reco_id);
+
+    if (!res_any.has_value()) {
+        LogError << "reco_id has no value (not found)" << VAR(reco_id);
+        return false;
+    }
+
+    auto res = std::any_cast<MAA_TASK_NS::Recognizer::Result>(res_any);
+
+    hit = res.hit.has_value();
+    if (hit) {
+        box = *res.hit;
+    }
+    detail = res.detail.to_string();
+    draws = res.draws;
+
+    return true;
 }
 
-std::optional<Recognizer::Result> Recognizer::template_match(const cv::Mat& image,
-                                                             const MAA_VISION_NS::TemplateMatcherParam& param,
-                                                             const std::string& name)
+template <typename Res>
+json::value gen_detail(
+    const std::vector<Res>& all,
+    const std::vector<Res>& filtered,
+    const std::optional<Res>& best)
+{
+    std::ignore = best;
+
+    return {
+        { "all", json::array(all) },
+        { "filtered", json::array(filtered) },
+        { "best", best ? json::value(*best) : json::value(nullptr) },
+    };
+}
+
+Recognizer::Result Recognizer::direct_hit(const std::string& name)
+{
+    LogTrace << name;
+    return Result { .hit = cv::Rect {} };
+}
+
+Recognizer::Result Recognizer::template_match(
+    const cv::Mat& image,
+    const MAA_VISION_NS::TemplateMatcherParam& param,
+    const std::string& name)
 {
     using namespace MAA_VISION_NS;
 
     if (!resource()) {
         LogError << "Resource not binded";
-        return std::nullopt;
+        return {};
     }
-
-    TemplateMatcher matcher;
-    matcher.set_image(image);
-    matcher.set_name(name);
-    matcher.set_param(param);
 
     std::vector<std::shared_ptr<cv::Mat>> templates;
     for (const auto& path : param.template_paths) {
@@ -111,196 +173,250 @@ std::optional<Recognizer::Result> Recognizer::template_match(const cv::Mat& imag
         }
         templates.emplace_back(std::move(templ));
     }
-    matcher.set_templates(std::move(templates));
 
-    auto [results, index] = matcher.analyze();
-    if (index >= results.size()) {
-        return std::nullopt;
+    TemplateMatcher analyzer(image, param, templates, name);
+
+    std::optional<Hit> hit = std::nullopt;
+    if (analyzer.best_result()) {
+        hit = analyzer.best_result()->box;
     }
 
-    const cv::Rect& box = results[index].box;
-    return Result { .box = box, .detail = std::move(results) };
+    return Result {
+        .uid = analyzer.uid(),
+        .hit = std::move(hit),
+        .detail =
+            gen_detail(analyzer.all_results(), analyzer.filtered_results(), analyzer.best_result()),
+        .draws = std::move(analyzer).draws()
+    };
 }
 
-std::optional<Recognizer::Result> Recognizer::feature_match(const cv::Mat& image,
-                                                            const MAA_VISION_NS::FeatureMatcherParam& param,
-                                                            const std::string& name)
+Recognizer::Result Recognizer::feature_match(
+    const cv::Mat& image,
+    const MAA_VISION_NS::FeatureMatcherParam& param,
+    const std::string& name)
 {
     using namespace MAA_VISION_NS;
 
     if (!resource()) {
         LogError << "Resource not binded";
-        return std::nullopt;
+        return {};
     }
 
-    FeatureMatcher matcher;
-    matcher.set_image(image);
-    matcher.set_name(name);
-    matcher.set_param(param);
-
-    std::shared_ptr<cv::Mat> templ = resource()->template_res().image(param.template_path);
-    matcher.set_template(std::move(templ));
-
-    auto [results, index] = matcher.analyze();
-    if (index >= results.size()) {
-        return std::nullopt;
+    std::vector<std::shared_ptr<cv::Mat>> templates;
+    for (const auto& path : param.template_paths) {
+        auto templ = resource()->template_res().image(path);
+        if (!templ) {
+            LogWarn << "Template not found:" << path;
+            continue;
+        }
+        templates.emplace_back(std::move(templ));
     }
 
-    const cv::Rect& box = results[index].box;
-    return Result { .box = box, .detail = std::move(results) };
+    FeatureMatcher analyzer(image, param, templates, name);
+
+    std::optional<Hit> hit = std::nullopt;
+    if (analyzer.best_result()) {
+        hit = analyzer.best_result()->box;
+    }
+
+    return Result {
+        .uid = analyzer.uid(),
+        .hit = std::move(hit),
+        .detail =
+            gen_detail(analyzer.all_results(), analyzer.filtered_results(), analyzer.best_result()),
+        .draws = std::move(analyzer).draws()
+    };
 }
 
-std::optional<Recognizer::Result> Recognizer::color_match(const cv::Mat& image,
-                                                          const MAA_VISION_NS::ColorMatcherParam& param,
-                                                          const std::string& name)
+Recognizer::Result Recognizer::color_match(
+    const cv::Mat& image,
+    const MAA_VISION_NS::ColorMatcherParam& param,
+    const std::string& name)
 {
     using namespace MAA_VISION_NS;
 
     if (!resource()) {
         LogError << "Resource not binded";
-        return std::nullopt;
+        return {};
     }
 
-    ColorMatcher matcher;
-    matcher.set_image(image);
-    matcher.set_name(name);
-    matcher.set_param(param);
+    ColorMatcher analyzer(image, param, name);
 
-    auto [results, index] = matcher.analyze();
-    if (index >= results.size()) {
-        return std::nullopt;
+    std::optional<Hit> hit = std::nullopt;
+    if (analyzer.best_result()) {
+        hit = analyzer.best_result()->box;
     }
 
-    const cv::Rect& box = results[index].box;
-    return Result { .box = box, .detail = std::move(results) };
+    return Result {
+        .uid = analyzer.uid(),
+        .hit = std::move(hit),
+        .detail =
+            gen_detail(analyzer.all_results(), analyzer.filtered_results(), analyzer.best_result()),
+        .draws = std::move(analyzer).draws()
+    };
 }
 
-std::optional<Recognizer::Result> Recognizer::ocr(const cv::Mat& image, const MAA_VISION_NS::OCRerParam& param,
-                                                  const std::string& name)
+Recognizer::Result Recognizer::ocr(
+    const cv::Mat& image,
+    const MAA_VISION_NS::OCRerParam& param,
+    const std::string& name)
 {
     using namespace MAA_VISION_NS;
 
     if (!resource()) {
-        LogError << "Resource not binded";
-        return std::nullopt;
+        LogError << "Resource not binded or status is null" << VAR(resource());
+        return {};
     }
-
-    OCRer ocrer;
-    ocrer.set_image(image);
-    ocrer.set_name(name);
-    ocrer.set_param(param);
 
     auto det_session = resource()->ocr_res().deter(param.model);
     auto rec_session = resource()->ocr_res().recer(param.model);
     auto ocr_session = resource()->ocr_res().ocrer(param.model);
-    ocrer.set_session(std::move(det_session), std::move(rec_session), std::move(ocr_session));
 
-    auto [results, index] = ocrer.analyze();
-    if (index >= results.size()) {
-        return std::nullopt;
+    OCRer analyzer(image, param, det_session, rec_session, ocr_session, ocr_cache_, name);
+
+    std::optional<Hit> hit = std::nullopt;
+    if (analyzer.best_result()) {
+        hit = analyzer.best_result()->box;
     }
 
-    const cv::Rect& box = results[index].box;
-    return Result { .box = box, .detail = std::move(results) };
+    return Result {
+        .uid = analyzer.uid(),
+        .hit = std::move(hit),
+        .detail =
+            gen_detail(analyzer.all_results(), analyzer.filtered_results(), analyzer.best_result()),
+        .draws = std::move(analyzer).draws()
+    };
 }
 
-std::optional<Recognizer::Result> Recognizer::classify(const cv::Mat& image,
-                                                       const MAA_VISION_NS::NeuralNetworkClassifierParam& param,
-                                                       const std::string& name)
+Recognizer::Result Recognizer::nn_classify(
+    const cv::Mat& image,
+    const MAA_VISION_NS::NeuralNetworkClassifierParam& param,
+    const std::string& name)
 {
     using namespace MAA_VISION_NS;
 
     if (!resource()) {
         LogError << "Resource not binded";
-        return std::nullopt;
+        return {};
     }
-
-    NeuralNetworkClassifier classifier;
-    classifier.set_image(image);
-    classifier.set_name(name);
-    classifier.set_param(param);
 
     auto session = resource()->onnx_res().classifier(param.model);
-    classifier.set_session(std::move(session));
 
-    auto [results, index] = classifier.analyze();
-    if (index >= results.size()) {
-        return std::nullopt;
+    NeuralNetworkClassifier analyzer(image, param, session, name);
+
+    std::optional<Hit> hit = std::nullopt;
+    if (analyzer.best_result()) {
+        hit = analyzer.best_result()->box;
     }
 
-    const cv::Rect& box = results[index].box;
-    return Result { .box = box, .detail = std::move(results) };
+    return Result {
+        .uid = analyzer.uid(),
+        .hit = std::move(hit),
+        .detail =
+            gen_detail(analyzer.all_results(), analyzer.filtered_results(), analyzer.best_result()),
+        .draws = std::move(analyzer).draws()
+    };
 }
 
-std::optional<Recognizer::Result> Recognizer::detect(const cv::Mat& image,
-                                                     const MAA_VISION_NS::NeuralNetworkDetectorParam& param,
-                                                     const std::string& name)
+Recognizer::Result Recognizer::nn_detect(
+    const cv::Mat& image,
+    const MAA_VISION_NS::NeuralNetworkDetectorParam& param,
+    const std::string& name)
 {
     using namespace MAA_VISION_NS;
 
     if (!resource()) {
         LogError << "Resource not binded";
-        return std::nullopt;
+        return {};
     }
-
-    NeuralNetworkDetector detector;
-    detector.set_image(image);
-    detector.set_name(name);
-    detector.set_param(param);
 
     auto session = resource()->onnx_res().detector(param.model);
-    detector.set_session(std::move(session));
 
-    auto [results, index] = detector.analyze();
-    if (index >= results.size()) {
-        return std::nullopt;
+    NeuralNetworkDetector analyzer(image, param, session, name);
+
+    std::optional<Hit> hit = std::nullopt;
+    if (analyzer.best_result()) {
+        hit = analyzer.best_result()->box;
     }
 
-    const cv::Rect& box = results[index].box;
-    return Result { .box = box, .detail = std::move(results) };
+    return Result {
+        .uid = analyzer.uid(),
+        .hit = std::move(hit),
+        .detail =
+            gen_detail(analyzer.all_results(), analyzer.filtered_results(), analyzer.best_result()),
+        .draws = std::move(analyzer).draws()
+    };
 }
 
-std::optional<Recognizer::Result> Recognizer::custom_recognize(const cv::Mat& image,
-                                                               const MAA_VISION_NS::CustomRecognizerParam& param,
-                                                               const std::string& name)
+Recognizer::Result Recognizer::custom_recognize(
+    const cv::Mat& image,
+    const MAA_VISION_NS::CustomRecognizerParam& param,
+    const std::string& name)
 {
     using namespace MAA_VISION_NS;
 
     if (!inst_) {
         LogError << "Instance not binded";
-        return std::nullopt;
+        return {};
     }
 
-    auto recognizer = inst_->custom_recognizer(param.name);
-    if (!recognizer) {
+    auto* session = inst_->custom_recognizer_session(param.name);
+    if (!session) {
         LogError << "Custom recognizer not found:" << param.name;
-        return std::nullopt;
-    }
-    recognizer->set_image(image);
-    recognizer->set_param(param);
-    recognizer->set_name(name);
-
-    auto result_opt = recognizer->analyze();
-    if (!result_opt) {
-        return std::nullopt;
+        return {};
     }
 
-    const cv::Rect& box = result_opt->box;
-    return Result { .box = box, .detail = std::move(*result_opt) };
+    CustomRecognizer analyzer(image, param, *session, inst_, name);
+
+    std::optional<Hit> hit = std::nullopt;
+    if (analyzer.best_result()) {
+        hit = analyzer.best_result()->box;
+    }
+
+    return Result {
+        .uid = analyzer.uid(),
+        .hit = std::move(hit),
+        .detail =
+            gen_detail(analyzer.all_results(), analyzer.filtered_results(), analyzer.best_result()),
+        .draws = std::move(analyzer).draws()
+    };
 }
 
-void Recognizer::show_hit_draw(const cv::Mat& image, const Result& res, const std::string& task_name) const
+void Recognizer::save_draws(const std::string& task_name, const Result& result) const
+{
+    const auto& option = GlobalOptionMgr::get_instance();
+
+    if (!option.save_draw()) {
+        return;
+    }
+
+    auto dir = option.log_dir() / "vision";
+
+    for (const auto& draw : result.draws) {
+        std::string filename =
+            std::format("{}_{}_{}.png", task_name, result.uid, format_now_for_filename());
+        auto filepath = dir / path(filename);
+        imwrite(filepath, draw);
+        LogDebug << "save draw to" << filepath;
+    }
+}
+
+void Recognizer::show_hit_draw(
+    const cv::Mat& image,
+    const Hit& res,
+    const std::string& task_name,
+    MaaRecoId uid) const
 {
     if (!GlobalOptionMgr::get_instance().show_hit_draw()) {
         return;
     }
 
-    const std::string kWinName = std::format("Hit: {}", task_name);
+    const std::string kWinName = std::format("Hit: {} {}", task_name, uid);
 
     cv::Mat draw = image.clone();
 
     const cv::Scalar color(0, 255, 0);
-    cv::rectangle(draw, res.box, color, 2);
+    cv::rectangle(draw, res, color, 2);
 
     cv::imshow(kWinName, draw);
     cv::waitKey(0);

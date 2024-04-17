@@ -5,13 +5,17 @@
 #include "Base/UnitBase.h"
 #include "ControlUnit/ControlUnitAPI.h"
 #include "Utils/MessageNotifier.hpp"
+#include "Utils/SafeWindows.hpp"
 
 MAA_CTRL_UNIT_NS_BEGIN
 
 class ControlUnitMgr : public ControlUnitAPI
 {
 public:
-    ControlUnitMgr(HWND hWnd, MaaControllerCallback callback, MaaCallbackTransparentArg callback_arg);
+    ControlUnitMgr(
+        HWND hWnd,
+        MaaControllerCallback callback,
+        MaaCallbackTransparentArg callback_arg);
     virtual ~ControlUnitMgr() override = default;
 
 public: // from ControlUnitAPI
@@ -41,7 +45,9 @@ public:
     bool parse(const json::value& config);
 
     void set_touch_input_obj(std::shared_ptr<TouchInputBase> obj) { touch_input_ = std::move(obj); }
+
     void set_key_input_obj(std::shared_ptr<KeyInputBase> obj) { key_input_ = std::move(obj); }
+
     void set_screencap_obj(std::shared_ptr<ScreencapBase> obj) { screencap_ = std::move(obj); }
 
 private:

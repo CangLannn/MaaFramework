@@ -10,28 +10,33 @@
 
 MAA_VISION_NS_BEGIN
 
-class CustomRecognizer : public VisionBase
+struct CustomRecognizerResult
 {
-    struct Result
-    {
-        cv::Rect box {};
-        json::value detail;
+    cv::Rect box {};
+    json::value detail;
 
-        MEO_JSONIZATION(box, detail);
-    };
+    MEO_JSONIZATION(box, detail);
+};
 
+class CustomRecognizer
+    : public VisionBase
+    , public RecoResultAPI<CustomRecognizerResult>
+{
 public:
-    CustomRecognizer(MaaCustomRecognizerHandle handle, MaaTransparentArg handle_arg, InstanceInternalAPI* inst);
-
-    void set_param(CustomRecognizerParam param) { param_ = std::move(param); }
-    std::optional<Result> analyze() const;
+    CustomRecognizer(
+        cv::Mat image,
+        CustomRecognizerParam param,
+        CustomRecognizerSession session,
+        InstanceInternalAPI* inst,
+        std::string name = "");
 
 private:
-    MaaCustomRecognizerHandle recognizer_ = nullptr;
-    MaaTransparentArg recognizer_arg_ = nullptr;
-    InstanceInternalAPI* inst_ = nullptr;
+    void analyze();
 
-    CustomRecognizerParam param_;
+private:
+    const CustomRecognizerParam param_;
+    CustomRecognizerSession session_;
+    InstanceInternalAPI* inst_ = nullptr;
 };
 
 MAA_VISION_NS_END

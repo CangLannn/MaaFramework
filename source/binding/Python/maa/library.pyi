@@ -1,5 +1,5 @@
-from ctypes import c_int32
 import pathlib
+from ctypes import c_int32
 from typing import Optional, Union
 
 from .define import *
@@ -8,6 +8,26 @@ class _Framework:
     # library.py
     @staticmethod
     def MaaVersion() -> MaaStringView: ...
+    @staticmethod
+    def MaaSetGlobalOption(
+        key: MaaGlobalOption,
+        value: MaaOptionValue,
+        val_size: MaaOptionValueSize,
+    ) -> MaaBool: ...
+    @staticmethod
+    def MaaQueryRecognitionDetail(
+        reco_id: MaaRecoId,
+        hit: ctypes.POINTER(MaaBool),
+        hit_box: MaaRectHandle,
+        detail_json: MaaStringBufferHandle,
+        draws: MaaImageListBufferHandle,
+    ) -> MaaBool: ...
+    @staticmethod
+    def MaaQueryRunningDetail(
+        run_id: MaaRunningId,
+        reco_id: ctypes.POINTER(MaaRecoId),
+        successful: ctypes.POINTER(MaaBool),
+    ) -> MaaBool: ...
 
     # buffer.py
     # StringBuffer
@@ -31,6 +51,30 @@ class _Framework:
         str: MaaStringView,
         size: MaaSize,
     ) -> MaaBool: ...
+    # StringListBuffer
+    @staticmethod
+    def MaaCreateStringListBuffer() -> MaaStringListBufferHandle: ...
+    @staticmethod
+    def MaaDestroyStringListBuffer(handle: MaaStringListBufferHandle) -> None: ...
+    @staticmethod
+    def MaaIsStringListEmpty(handle: MaaStringListBufferHandle) -> MaaBool: ...
+    @staticmethod
+    def MaaClearStringList(handle: MaaStringListBufferHandle) -> MaaBool: ...
+    @staticmethod
+    def MaaGetStringListSize(handle: MaaStringListBufferHandle) -> MaaSize: ...
+    @staticmethod
+    def MaaGetStringListAt(
+        handle: MaaStringListBufferHandle, index: MaaSize
+    ) -> MaaStringView: ...
+    @staticmethod
+    def MaaStringListAppend(
+        handle: MaaStringListBufferHandle, value: MaaStringBufferHandle
+    ) -> MaaBool: ...
+    @staticmethod
+    def MaaStringListRemove(
+        handle: MaaStringListBufferHandle, index: MaaSize
+    ) -> MaaBool: ...
+
     # ImageBuffer
     @staticmethod
     def MaaCreateImageBuffer() -> MaaCreateImageBuffer: ...
@@ -76,6 +120,29 @@ class _Framework:
         y: c_int32,
         w: c_int32,
         h: c_int32,
+    ) -> MaaBool: ...
+    # ImageListBuffer
+    @staticmethod
+    def MaaCreateImageListBuffer() -> MaaImageListBufferHandle: ...
+    @staticmethod
+    def MaaDestroyImageListBuffer(handle: MaaImageListBufferHandle) -> None: ...
+    @staticmethod
+    def MaaIsImageListEmpty(handle: MaaImageListBufferHandle) -> MaaBool: ...
+    @staticmethod
+    def MaaClearImageList(handle: MaaImageListBufferHandle) -> MaaBool: ...
+    @staticmethod
+    def MaaGetImageListSize(handle: MaaImageListBufferHandle) -> MaaSize: ...
+    @staticmethod
+    def MaaGetImageListAt(
+        handle: MaaImageListBufferHandle, index: MaaSize
+    ) -> MaaImageBufferHandle: ...
+    @staticmethod
+    def MaaImageListAppend(
+        handle: MaaImageListBufferHandle, value: MaaImageBufferHandle
+    ) -> MaaBool: ...
+    @staticmethod
+    def MaaImageListRemove(
+        handle: MaaImageListBufferHandle, index: MaaSize
     ) -> MaaBool: ...
 
     # context.py
@@ -153,12 +220,6 @@ class _Framework:
         sync_context: MaaSyncContextHandle,
         out_image: MaaImageBufferHandle,
     ) -> MaaBool: ...
-    @staticmethod
-    def MaaSyncContextGetTaskResult(
-        sync_context: MaaSyncContextHandle,
-        task_name: MaaStringView,
-        out_task_result: MaaStringBufferHandle,
-    ) -> MaaBool: ...
 
     # controller.py
     # Contorller
@@ -180,6 +241,34 @@ class _Framework:
     ) -> MaaStatus: ...
     @staticmethod
     def MaaControllerConnected(ctrl: MaaControllerHandle) -> MaaBool: ...
+    @staticmethod
+    def MaaControllerPostClick(
+        ctrl: MaaControllerHandle, x: c_int32, y: c_int32
+    ) -> MaaCtrlId: ...
+    @staticmethod
+    def MaaControllerPostSwipe(
+        ctrl: MaaControllerHandle,
+        x1: c_int32,
+        y1: c_int32,
+        x2: c_int32,
+        y2: c_int32,
+        duration: c_int32,
+    ) -> MaaCtrlId: ...
+    @staticmethod
+    def MaaControllerPostPressKey(
+        ctrl: MaaControllerHandle, keycode: c_int32
+    ) -> MaaCtrlId: ...
+    @staticmethod
+    def MaaControllerPostInputText(
+        ctrl: MaaControllerHandle, text: MaaStringView
+    ) -> MaaCtrlId: ...
+    @staticmethod
+    def MaaControllerPostScreencap(ctrl: MaaControllerHandle) -> MaaCtrlId: ...
+    @staticmethod
+    def MaaControllerGetImage(
+        ctrl: MaaControllerHandle,
+        out_image: MaaImageBufferHandle,
+    ) -> MaaBool: ...
     # AdbController
     @staticmethod
     def MaaAdbControllerCreateV2(
@@ -266,7 +355,7 @@ class _Framework:
         id: MaaTaskId,
     ) -> MaaStatus: ...
     @staticmethod
-    def MaaTaskAllFinished(inst: MaaInstanceHandle) -> MaaBool: ...
+    def MaaRunning(inst: MaaInstanceHandle) -> MaaBool: ...
     @staticmethod
     def MaaPostStop(inst: MaaInstanceHandle) -> MaaBool: ...
     @staticmethod
@@ -304,13 +393,15 @@ class _Framework:
     ) -> MaaStatus: ...
     @staticmethod
     def MaaResourceLoaded(res: MaaResourceHandle) -> MaaBool: ...
+    @staticmethod
+    def MaaResourceClear(res: MaaResourceHandle) -> MaaBool: ...
 
 class _Toolkit:
     # toolkit.py
     @staticmethod
-    def MaaToolkitInit() -> MaaBool: ...
-    @staticmethod
-    def MaaToolkitUninit() -> MaaBool: ...
+    def MaaToolkitInitOptionConfig(
+        user_path: MaaStringView, default_json: MaaStringView
+    ) -> MaaBool: ...
     @staticmethod
     def MaaToolkitPostFindDevice() -> MaaBool: ...
     @staticmethod
@@ -378,6 +469,7 @@ class Library:
         :return: True if the library was successfully opened, False otherwise.
         """
         pass
+
     @classmethod
     def version(cls) -> str:
         """

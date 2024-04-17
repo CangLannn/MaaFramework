@@ -38,7 +38,7 @@ jobs:
           is_release=${{ startsWith(github.ref, 'refs/tags/v') }}
           tag=$(git describe --tags --match "v*" ${{ github.ref }} || true)
           if [[ $tag != v* ]]; then
-            tag=$(curl -sX GET "https://api.github.com/repos/MaaAssistantArknights/MaaFramework/releases/latest" --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' | awk '/tag_name/{print $4}' FS='["]')
+            tag=$(curl -sX GET "https://api.github.com/repos/MaaXYZ/MaaFramework/releases/latest" --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' | awk '/tag_name/{print $4}' FS='["]')
             if [[ $tag != v* ]]; then
               tag="v0.0.0"
             fi
@@ -144,7 +144,12 @@ jobs:
           pacman -Sy
           pacman -S --noconfirm cmake python ccache ninja git
 
-      # https://github.com/MaaAssistantArknights/MaaFramework/actions/runs/5643408179/job/15285186255
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      # https://github.com/MaaXYZ/MaaFramework/actions/runs/5643408179/job/15285186255
       - uses: actions/checkout@v3
         with:
           submodules: true
@@ -201,7 +206,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-12
+          - os: macos-13
             arch: x86_64
           - os: macos-14
             arch: aarch64
@@ -215,7 +220,7 @@ jobs:
 
       - name: Install dep
         run: |
-          brew install cmake python ninja
+          brew install cmake ninja
         # ccache?
 
       - name: Install compiler
@@ -234,10 +239,8 @@ jobs:
         env:
           CC: "/usr/local/opt/llvm/bin/clang"
           CXX: "/usr/local/opt/llvm/bin/clang++"
-          LDFLAGS: "-L/usr/local/opt/llvm/lib/c++ -Wl,-rpath,/usr/local/opt/llvm/lib/c++"
         run: |
           cmake --preset 'NinjaMulti' \
-            -DCMAKE_OSX_ARCHITECTURES='${{ matrix.arch == 'x86_64' && 'x86_64' || 'arm64' }}' \
             -DMAADEPS_TRIPLET='maa-${{ matrix.arch == 'x86_64' && 'x64' || 'arm64' }}-osx' \
             -DMAA_HASH_VERSION='${{ needs.meta.outputs.tag }}'
 
@@ -248,7 +251,6 @@ jobs:
         env:
           CC: "/opt/homebrew/opt/llvm/bin/clang"
           CXX: "/opt/homebrew/opt/llvm/bin/clang++"
-          LDFLAGS: "-L/opt/homebrew/opt/llvm/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++"
         run: |
           cmake --preset 'NinjaMulti' \
             -DMAADEPS_TRIPLET='maa-${{ matrix.arch == 'x86_64' && 'x64' || 'arm64' }}-osx' \
@@ -376,9 +378,31 @@ jobs:
           name: MAA-nupkgs
           path: "tools/nupkgs/*.nupkg"
 
+  pip_pack:
+    needs: [meta, windows, ubuntu, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          path: assets
+
+      - name: Pip Pack
+        working-directory: tools/pip_pack
+        run: |
+          tag=${{ needs.meta.outputs.tag }}
+          pip install --upgrade wheel build tomlkit
+          python pip_pack.py $tag
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: MAA-pip-pkgs
+          path: "tools/pip_pack/wheel/*.whl"
+
   release:
     if: ${{ needs.meta.outputs.is_release == 'true' }}
-    needs: [meta, windows, ubuntu, macos, nuget_pack]
+    needs: [meta, windows, ubuntu, macos, nuget_pack, pip_pack]
     runs-on: ubuntu-latest
     env:
       NUGET_PACKAGE_SOURCE: https://api.nuget.org/v3/index.json # https://apiint.nugettest.org/v3/index.json
@@ -395,6 +419,15 @@ jobs:
             -Source $NUGET_PACKAGE_SOURCE \
             -SkipDuplicate
           rm -r assets/MAA-nupkgs
+
+      - name: Publish Pip Packages
+        run: |
+          pip install --upgrade twine
+          python -m twine upload \
+            assets/MAA-pip-pkgs/*.whl \
+            --username __token__\
+            --password ${{ secrets.PYPI_TOKEN }}
+          rm -r assets/MAA-pip-pkgs
 
       - run: |
           cd assets

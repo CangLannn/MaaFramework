@@ -1,21 +1,28 @@
 #include "Actuator.h"
 
 #include "Controller/ControllerAgent.h"
-#include "Instance/InstanceStatus.h"
+#include "Global/UniqueResultBank.h"
 #include "Task/CustomAction.h"
 #include "Utils/Logger.h"
 #include "Vision/TemplateComparator.h"
 
 MAA_TASK_NS_BEGIN
 
-Actuator::Actuator(InstanceInternalAPI* inst) : inst_(inst) {}
+Actuator::Actuator(InstanceInternalAPI* inst, const PreTaskBoxes& boxes)
+    : inst_(inst)
+    , pre_task_boxes_(boxes)
+{
+}
 
-bool Actuator::run(const Recognizer::Result& rec_result, const TaskData& task_data)
+bool Actuator::run(
+    const Recognizer::Hit& reco_hit,
+    const json::value& reco_detail,
+    const TaskData& task_data)
 {
     using namespace MAA_RES_NS::Action;
     LogFunc << VAR(task_data.name);
 
-    wait_freezes(task_data.pre_wait_freezes, rec_result.box);
+    wait_freezes(task_data.pre_wait_freezes, reco_hit);
     sleep(task_data.pre_delay);
 
     bool ret = false;
@@ -24,10 +31,10 @@ bool Actuator::run(const Recognizer::Result& rec_result, const TaskData& task_da
         ret = true;
         break;
     case Type::Click:
-        ret = click(std::get<ClickParam>(task_data.action_param), rec_result.box);
+        ret = click(std::get<ClickParam>(task_data.action_param), reco_hit);
         break;
     case Type::Swipe:
-        ret = swipe(std::get<SwipeParam>(task_data.action_param), rec_result.box);
+        ret = swipe(std::get<SwipeParam>(task_data.action_param), reco_hit);
         break;
     case Type::Key:
         ret = press_key(std::get<KeyParam>(task_data.action_param));
@@ -42,8 +49,11 @@ bool Actuator::run(const Recognizer::Result& rec_result, const TaskData& task_da
         ret = stop_app(std::get<AppParam>(task_data.action_param));
         break;
     case Type::Custom:
-        ret = custom_action(task_data.name, std::get<CustomParam>(task_data.action_param), rec_result.box,
-                            rec_result.detail);
+        ret = custom_action(
+            task_data.name,
+            std::get<CustomParam>(task_data.action_param),
+            reco_hit,
+            reco_detail);
         break;
     case Type::StopTask:
         LogInfo << "Action: StopTask";
@@ -54,7 +64,7 @@ bool Actuator::run(const Recognizer::Result& rec_result, const TaskData& task_da
         break;
     }
 
-    wait_freezes(task_data.post_wait_freezes, rec_result.box);
+    wait_freezes(task_data.post_wait_freezes, reco_hit);
     sleep(task_data.post_delay);
 
     return ret;
@@ -122,31 +132,27 @@ void Actuator::wait_freezes(const MAA_RES_NS::WaitFreezesParam& param, const cv:
     LogFunc << "Wait freezes:" << VAR(param.time) << VAR(param.threshold) << VAR(param.method);
 
     cv::Rect target = get_target_rect(param.target, cur_box);
+    cv::Mat pre_image = controller()->screencap();
 
-    TemplateComparator comp;
-    comp.set_param({
+    TemplateComparatorParam comp_param {
         .roi = { target },
         .threshold = param.threshold,
         .method = param.method,
-    });
-
-    cv::Mat pre_image = controller()->screencap();
-    if (need_to_stop()) {
-        LogInfo << "Task interrupted";
-        return;
-    }
+    };
 
     auto pre_time = std::chrono::steady_clock::now();
 
     while (true) {
         cv::Mat cur_image = controller()->screencap();
-        if (need_to_stop()) {
-            LogInfo << "Task interrupted";
-            return;
+
+        if (pre_image.empty() || cur_image.empty()) {
+            LogError << "Image is empty" << VAR(pre_image.empty()) << VAR(cur_image.empty());
+            break;
         }
 
-        auto ret = comp.analyze(pre_image, cur_image);
-        if (ret.empty()) {
+        TemplateComparator comparator(pre_image, cur_image, comp_param);
+
+        if (!comparator.best_result()) {
             pre_image = cur_image;
             pre_time = std::chrono::steady_clock::now();
             continue;
@@ -186,39 +192,43 @@ bool Actuator::stop_app(const MAA_RES_NS::Action::AppParam& param)
     return controller()->stop_app(param.package);
 }
 
-bool Actuator::custom_action(const std::string& task_name, const MAA_RES_NS::Action::CustomParam& param,
-                             const cv::Rect& cur_box, const json::value& cur_rec_detail)
+bool Actuator::custom_action(
+    const std::string& task_name,
+    const MAA_RES_NS::Action::CustomParam& param,
+    const cv::Rect& cur_box,
+    const json::value& cur_rec_detail)
 {
     if (!inst_) {
         LogError << "Inst is null";
         return false;
     }
-    auto action = inst_->custom_action(param.name);
-    if (!action) {
+    auto* session = inst_->custom_action_session(param.name);
+    if (!session) {
         LogError << "Custom task not found" << VAR(param.name);
         return false;
     }
 
-    return action->run(task_name, param, cur_box, cur_rec_detail);
+    return CustomAction(*session, inst_).run(task_name, param, cur_box, cur_rec_detail);
 }
 
 cv::Rect Actuator::get_target_rect(const MAA_RES_NS::Action::Target target, const cv::Rect& cur_box)
 {
     using namespace MAA_RES_NS::Action;
 
-    if (!status()) {
-        LogError << "Status is null";
-        return {};
-    }
-
     cv::Rect raw {};
     switch (target.type) {
     case Target::Type::Self:
         raw = cur_box;
         break;
-    case Target::Type::PreTask:
-        raw = status()->get_rec_box(std::get<std::string>(target.param));
-        break;
+    case Target::Type::PreTask: {
+        const std::string& pre_task_name = std::get<std::string>(target.param);
+        if (auto it = pre_task_boxes_.find(pre_task_name); it == pre_task_boxes_.end()) {
+            LogError << "Pre task not found" << VAR(pre_task_name);
+        }
+        else {
+            raw = it->second;
+        }
+    } break;
     case Target::Type::Region:
         raw = std::get<cv::Rect>(target.param);
         break;
@@ -227,7 +237,9 @@ cv::Rect Actuator::get_target_rect(const MAA_RES_NS::Action::Target target, cons
         return {};
     }
 
-    return cv::Rect { raw.x + target.offset.x, raw.y + target.offset.y, raw.width + target.offset.width,
+    return cv::Rect { raw.x + target.offset.x,
+                      raw.y + target.offset.y,
+                      raw.width + target.offset.width,
                       raw.height + target.offset.height };
 }
 
@@ -238,29 +250,9 @@ void Actuator::sleep(unsigned ms) const
 
 void Actuator::sleep(std::chrono::milliseconds ms) const
 {
-    if (need_to_stop()) {
-        return;
-    }
+    LogFunc << ms;
 
-    using namespace std::chrono_literals;
-
-    if (ms == 0ms) {
-        std::this_thread::yield();
-        return;
-    }
-
-    auto interval = std::min(ms, 5000ms);
-
-    LogTrace << "ready to sleep" << ms << VAR(interval);
-
-    for (auto sleep_time = interval; sleep_time <= ms && !need_to_stop(); sleep_time += interval) {
-        std::this_thread::sleep_for(interval);
-    }
-    if (!need_to_stop()) {
-        std::this_thread::sleep_for(ms % interval);
-    }
-
-    LogTrace << "end of sleep" << ms << VAR(interval);
+    std::this_thread::sleep_for(ms);
 }
 
 MAA_TASK_NS_END

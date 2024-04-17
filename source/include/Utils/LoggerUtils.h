@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(__APPLE__) || defined(__linux__)
+#include <unistd.h>
+#endif
+
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -10,22 +14,13 @@
 #include <tuple>
 #include <type_traits>
 
-#if defined(__APPLE__) || defined(__linux__)
-#include <unistd.h>
-#endif
-
 #include <meojson/json.hpp>
 
-#include "Conf/Conf.h"
 #include "MaaFramework/MaaDef.h"
 #include "MaaFramework/MaaPort.h"
 
-#include "Codec.h"
-#include "ImageIo.h"
-#include "Locale.hpp"
-#include "Platform.h"
+#include "Conf/Conf.h"
 #include "Time.hpp"
-#include "Uuid.h"
 
 namespace cv
 {
@@ -41,6 +36,8 @@ inline std::ostream& operator<<(std::ostream& os, const std::chrono::millisecond
 }
 #endif
 
+MAA_UTILS_API std::string utf8_to_crt(std::string_view utf8_str);
+
 enum class level
 {
     fatal = MaaLoggingLevel_Fatal,
@@ -53,7 +50,10 @@ enum class level
 
 struct MAA_UTILS_API separator
 {
-    explicit constexpr separator(std::string_view s) noexcept : str(s) {}
+    explicit constexpr separator(std::string_view s) noexcept
+        : str(s)
+    {
+    }
 
     static const separator none;
     static const separator space;
@@ -67,37 +67,24 @@ struct MAA_UTILS_API separator
 template <typename T>
 concept has_output_operator = requires { std::declval<std::ostream&>() << std::declval<T>(); };
 
-class StringConverter
+class MAA_UTILS_API StringConverter
 {
 public:
-    StringConverter(std::filesystem::path dumps_dir) : dumps_dir_(std::move(dumps_dir)) {}
+    StringConverter(std::filesystem::path dumps_dir)
+        : dumps_dir_(std::move(dumps_dir))
+    {
+    }
 
 public:
-    std::string operator()(const std::filesystem::path& path) const { return path_to_utf8_string(path); }
-    std::string operator()(const std::wstring& wstr) const { return from_u16(wstr); }
-    std::string operator()(const cv::Mat& image) const
-    {
-        if (dumps_dir_.empty()) {
-            return "Not logging";
-        }
-        if (image.empty()) {
-            return "Empty image";
-        }
-
-        std::string filename = std::format("{}-{}.png", format_now_for_filename(), make_uuid());
-        auto filepath = dumps_dir_ / path(filename);
-        bool ret = MAA_NS::imwrite(filepath, image);
-        if (!ret) {
-            return "Failed to write image";
-        }
-        return this->operator()(filepath);
-    }
+    std::string operator()(const std::filesystem::path& path) const;
+    std::string operator()(const std::wstring& wstr) const;
+    std::string operator()(const cv::Mat& image) const;
 
     template <typename T>
     std::string operator()(const std::optional<T>& value) const
     {
         if (!value) {
-            return nullptr;
+            return "nullopt";
         }
         return this->operator()(*value);
     }
@@ -112,6 +99,13 @@ public:
         }
         ss << value;
         return std::move(ss).str();
+    }
+
+    template <typename T>
+    requires(std::is_constructible_v<json::value, T> && !has_output_operator<T>)
+    std::string operator()(const T& value) const
+    {
+        return json::value(value).to_string();
     }
 
     template <typename T>
@@ -132,14 +126,25 @@ class MAA_UTILS_API LogStream
 {
 public:
     template <typename... args_t>
-    LogStream(std::mutex& m, std::ofstream& s, level lv, bool std_out, std::filesystem::path dumps_dir,
-              args_t&&... args)
-        : mutex_(m), stream_(s), lv_(lv), stdout_(std_out), string_converter_(std::move(dumps_dir))
+    LogStream(
+        std::mutex& m,
+        std::ofstream& s,
+        level lv,
+        bool std_out,
+        std::filesystem::path dumps_dir,
+        args_t&&... args)
+        : mutex_(m)
+        , stream_(s)
+        , lv_(lv)
+        , stdout_(std_out)
+        , string_converter_(std::move(dumps_dir))
     {
         stream_props(std::forward<args_t>(args)...);
     }
+
     LogStream(const LogStream&) = delete;
     LogStream(LogStream&&) noexcept = default;
+
     ~LogStream()
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -161,6 +166,7 @@ public:
         }
         return *this;
     }
+
     template <typename T>
     LogStream& operator,(T&& value)
     {
@@ -176,7 +182,8 @@ private:
             buffer_ << string_converter_(std::forward<T>(value)) << sep.str;
         }
         else {
-            buffer_ << json::serialize(std::forward<T>(value), string_converter_).dumps() << sep.str;
+            buffer_ << json::serialize(std::forward<T>(value), string_converter_).dumps()
+                    << sep.str;
         }
     }
 
@@ -190,7 +197,8 @@ private:
 #endif
         auto tid = static_cast<uint16_t>(std::hash<std::thread::id> {}(std::this_thread::get_id()));
 
-        std::string props = std::format("[{}][{}][Px{}][Tx{}]", format_now(), level_str(), pid, tid);
+        std::string props =
+            std::format("[{}][{}][Px{}][Tx{}]", format_now(), level_str(), pid, tid);
         for (auto&& arg : { args... }) {
             props += std::format("[{}]", arg);
         }

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string_view>
 #include <thread>
+#include <filesystem>
 
 #include <meojson/json.hpp>
 
@@ -22,16 +23,23 @@ class ExecAgentBase
 public:
     virtual ~ExecAgentBase();
 
-    bool register_executor(MaaInstanceHandle handle, std::string_view name, std::filesystem::path exec_path,
-                           std::vector<std::string> exec_args);
+    bool register_executor(
+        MaaInstanceHandle handle,
+        std::string_view name,
+        std::filesystem::path exec_path,
+        std::vector<std::string> exec_args);
     bool unregister_executor(MaaInstanceHandle handle, std::string_view name);
 
 protected:
-    virtual bool register_for_maa_inst(MaaInstanceHandle handle, std::string_view name, ExecData& executor) = 0;
+    virtual bool register_for_maa_inst(
+        MaaInstanceHandle handle,
+        std::string_view name,
+        ExecData& executor) = 0;
     virtual bool unregister_for_maa_inst(MaaInstanceHandle handle, std::string_view name) = 0;
 
-    std::optional<json::value> run_executor(const std::filesystem::path& exec_path,
-                                            const std::vector<std::string>& exec_args);
+    std::optional<json::value> run_executor(
+        const std::filesystem::path& exec_path,
+        const std::vector<std::string>& exec_args);
 
 protected:
     std::map<std::string, ExecData> exec_data_;
@@ -54,7 +62,6 @@ private:
     json::value ctx_touch_move(const json::value& cmd);
     json::value ctx_touch_up(const json::value& cmd);
     json::value ctx_screencap(const json::value& cmd);
-    json::value ctx_get_task_result(const json::value& cmd);
 
     MaaSyncContextHandle get_sync_context(const json::value& cmd);
     json::value invalid_json();

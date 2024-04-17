@@ -8,54 +8,46 @@
 
 MAA_VISION_NS_BEGIN
 
-std::pair<ColorMatcher::ResultsVec, size_t> ColorMatcher::analyze() const
+ColorMatcher::ColorMatcher(cv::Mat image, ColorMatcherParam param, std::string name)
+    : VisionBase(std::move(image), std::move(name))
+    , param_(std::move(param))
 {
-    ResultsVec all_results;
+    analyze();
+}
+
+void ColorMatcher::analyze()
+{
+    auto start_time = std::chrono::steady_clock::now();
 
     for (const auto& range : param_.range) {
-        auto start_time = std::chrono::steady_clock::now();
-
-        bool connected = param_.connected;
-        ResultsVec results = foreach_rois(range, connected);
-
-        auto cost = duration_since(start_time);
-        LogTrace << name_ << "Raw:" << VAR(results) << VAR(range.first) << VAR(range.second) << VAR(connected)
-                 << VAR(cost);
-
-        int count = param_.count;
-        filter(results, count);
-
-        cost = duration_since(start_time);
-        LogTrace << name_ << "Filter:" << VAR(results) << VAR(range.first) << VAR(range.second) << VAR(count)
-                 << VAR(connected) << VAR(cost);
-
-        all_results.insert(all_results.end(), std::make_move_iterator(results.begin()),
-                           std::make_move_iterator(results.end()));
+        auto results = match_all_rois(range);
+        add_results(std::move(results), param_.count);
     }
 
-    sort(all_results);
-    size_t index = preferred_index(all_results);
+    cherry_pick();
 
-    return { all_results, index };
+    auto cost = duration_since(start_time);
+    LogTrace << name_ << VAR(uid_) << VAR(all_results_) << VAR(filtered_results_)
+             << VAR(best_result_) << VAR(cost);
 }
 
-ColorMatcher::ResultsVec ColorMatcher::foreach_rois(const ColorMatcherParam::Range& range, bool connected) const
+ColorMatcher::ResultsVec ColorMatcher::match_all_rois(const ColorMatcherParam::Range& range) const
 {
     if (param_.roi.empty()) {
-        return { color_match(cv::Rect(0, 0, image_.cols, image_.rows), range, connected) };
+        return color_match(cv::Rect(0, 0, image_.cols, image_.rows), range);
     }
-
-    ResultsVec results;
-    for (const cv::Rect& roi : param_.roi) {
-        ResultsVec res = color_match(roi, range, connected);
-        results.insert(results.end(), std::make_move_iterator(res.begin()), std::make_move_iterator(res.end()));
+    else {
+        ResultsVec results;
+        for (const cv::Rect& roi : param_.roi) {
+            auto res = color_match(roi, range);
+            merge_vector_(results, std::move(res));
+        }
+        return results;
     }
-
-    return results;
 }
 
-ColorMatcher::ResultsVec ColorMatcher::color_match(const cv::Rect& roi, const ColorMatcherParam::Range& range,
-                                                   bool connected) const
+ColorMatcher::ResultsVec
+    ColorMatcher::color_match(const cv::Rect& roi, const ColorMatcherParam::Range& range) const
 {
     cv::Mat image = image_with_roi(roi);
     cv::Mat color;
@@ -63,10 +55,34 @@ ColorMatcher::ResultsVec ColorMatcher::color_match(const cv::Rect& roi, const Co
     cv::Mat bin;
     cv::inRange(color, range.first, range.second, bin);
 
-    ResultsVec results = connected ? count_non_zero_with_connected(bin, roi.tl()) : count_non_zero(bin, roi.tl());
+    ResultsVec results = param_.connected ? count_non_zero_with_connected(bin, roi.tl())
+                                          : count_non_zero(bin, roi.tl());
 
-    draw_result(roi, color, bin, results);
+    if (debug_draw_) {
+        auto draw = draw_result(roi, color, bin, results);
+        handle_draw(draw);
+    }
+
     return results;
+}
+
+void ColorMatcher::add_results(ResultsVec results, int count)
+{
+    std::ranges::copy_if(results, std::back_inserter(filtered_results_), [&](const auto& res) {
+        return res.count >= count;
+    });
+
+    merge_vector_(all_results_, std::move(results));
+}
+
+void ColorMatcher::cherry_pick()
+{
+    sort_(all_results_);
+    sort_(filtered_results_);
+
+    if (auto index_opt = pythonic_index(filtered_results_.size(), param_.result_index)) {
+        best_result_ = filtered_results_.at(*index_opt);
+    }
 }
 
 ColorMatcher::ResultsVec ColorMatcher::count_non_zero(const cv::Mat& bin, const cv::Point& tl) const
@@ -78,7 +94,8 @@ ColorMatcher::ResultsVec ColorMatcher::count_non_zero(const cv::Mat& bin, const 
     return { Result { .box = box, .count = count } };
 }
 
-ColorMatcher::ResultsVec ColorMatcher::count_non_zero_with_connected(const cv::Mat& bin, const cv::Point& tl) const
+ColorMatcher::ResultsVec
+    ColorMatcher::count_non_zero_with_connected(const cv::Mat& bin, const cv::Point& tl) const
 {
     ResultsVec results;
 
@@ -104,13 +121,12 @@ ColorMatcher::ResultsVec ColorMatcher::count_non_zero_with_connected(const cv::M
     return NMS_for_count(std::move(results), 0.7);
 }
 
-void ColorMatcher::draw_result(const cv::Rect& roi, const cv::Mat& color, const cv::Mat& bin,
-                               const ResultsVec& results) const
+cv::Mat ColorMatcher::draw_result(
+    const cv::Rect& roi,
+    const cv::Mat& color,
+    const cv::Mat& bin,
+    const ResultsVec& results) const
 {
-    if (!debug_draw_) {
-        return;
-    }
-
     cv::Mat image_draw = draw_roi(roi);
     const auto color_draw = cv::Scalar(0, 0, 255);
 
@@ -118,9 +134,22 @@ void ColorMatcher::draw_result(const cv::Rect& roi, const cv::Mat& color, const 
         const auto& res = results[i];
         cv::rectangle(image_draw, res.box, color_draw, 1);
 
-        std::string flag =
-            std::format("{}: {}, [{}, {}, {}, {}]", i, res.count, res.box.x, res.box.y, res.box.width, res.box.height);
-        cv::putText(image_draw, flag, cv::Point(res.box.x, res.box.y - 5), cv::FONT_HERSHEY_PLAIN, 1.2, color_draw, 1);
+        std::string flag = std::format(
+            "{}: {}, [{}, {}, {}, {}]",
+            i,
+            res.count,
+            res.box.x,
+            res.box.y,
+            res.box.width,
+            res.box.height);
+        cv::putText(
+            image_draw,
+            flag,
+            cv::Point(res.box.x, res.box.y - 5),
+            cv::FONT_HERSHEY_PLAIN,
+            1.2,
+            color_draw,
+            1);
         if (i > 10 && res.count < 100) {
             // 太多了画不下，反正后面的也是没用的
             LogDebug << "too many results, skip drawing" << VAR(results.size());
@@ -129,8 +158,15 @@ void ColorMatcher::draw_result(const cv::Rect& roi, const cv::Mat& color, const 
     }
 
     int raw_width = image_.cols;
-    cv::copyMakeBorder(image_draw, image_draw, 0, 0, 0, color.cols + bin.cols, cv::BORDER_CONSTANT,
-                       cv::Scalar(0, 0, 0));
+    cv::copyMakeBorder(
+        image_draw,
+        image_draw,
+        0,
+        0,
+        0,
+        color.cols + bin.cols,
+        cv::BORDER_CONSTANT,
+        cv::Scalar(0, 0, 0));
     cv::Mat draw_color_roi = image_draw(cv::Rect(raw_width, 0, color.cols, color.rows));
     color.copyTo(draw_color_roi);
 
@@ -141,15 +177,10 @@ void ColorMatcher::draw_result(const cv::Rect& roi, const cv::Mat& color, const 
 
     // cv::line(image_draw, cv::Point(raw_width + color.cols, 0), res.box.tl(), color_draw, 1);
 
-    handle_draw(image_draw);
+    return image_draw;
 }
 
-void ColorMatcher::filter(ResultsVec& results, int count) const
-{
-    std::erase_if(results, [count](const auto& res) { return res.count < count; });
-}
-
-void ColorMatcher::sort(ResultsVec& results) const
+void ColorMatcher::sort_(ResultsVec& results) const
 {
     switch (param_.order_by) {
     case ResultOrderBy::Horizontal:
@@ -171,16 +202,6 @@ void ColorMatcher::sort(ResultsVec& results) const
         LogError << "Not supported order by" << VAR(param_.order_by);
         break;
     }
-}
-
-size_t ColorMatcher::preferred_index(const ResultsVec& results) const
-{
-    auto index_opt = pythonic_index(results.size(), param_.result_index);
-    if (!index_opt) {
-        return SIZE_MAX;
-    }
-
-    return *index_opt;
 }
 
 MAA_VISION_NS_END

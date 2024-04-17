@@ -136,10 +136,23 @@
                 },
                 "threshold": {
                     "description": "模板匹配阈值。可选，默认 0.7 。",
-                    "type": "number",
-                    "default": 0.7,
-                    "minimum": 0,
-                    "maximum": 1
+                    "anyOf": [
+                        {
+                            "type": "number",
+                            "default": 0.7,
+                            "minimum": 0,
+                            "maximum": 1
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "number",
+                                "default": 0.7,
+                                "minimum": 0,
+                                "maximum": 1
+                            }
+                        }
+                    ]
                 },
                 "method": {
                     "description": "模板匹配算法，即 cv::TemplateMatchModes。可选，默认 5 ",
@@ -172,11 +185,6 @@
                     "description": "是否是相连的点才会被计数。可选，默认否。",
                     "type": "boolean",
                     "default": false
-                },
-                "text": {
-                    "description": "要匹配的文字，支持正则。必选（除非通过接口单独设置）。",
-                    "$ref": "#/definitions/tasklist",
-                    "default": ""
                 },
                 "replace": {
                     "description": "部分文字识别结果不准确，进行替换。可选。",
@@ -375,14 +383,31 @@
                                 },
                                 "not": {
                                     "required": [
-                                        "text_doc"
+                                        "expected_doc"
                                     ]
                                 }
                             },
                             "then": {
                                 "required": [
-                                    "text"
-                                ]
+                                    "expected"
+                                ],
+                                "properties": {
+                                    "expected": {
+                                        "description": "期望的结果，支持正则。必选（除非通过接口单独设置）。",
+                                        "anyOf": [
+                                            {
+                                                "type": "string"
+                                            },
+                                            {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "minItems": 1
+                                            }
+                                        ]
+                                    }
+                                }
                             }
                         },
                         {

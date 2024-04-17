@@ -1,8 +1,8 @@
 #pragma once
 
+#include <filesystem>
 #include <ostream>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "Conf/Conf.h"
@@ -34,10 +34,11 @@ struct Device
             return adb_config < rhs.adb_config;
         }
     }
+
     bool operator==(const Device& rhs) const
     {
-        return name == rhs.name && adb_path == rhs.adb_path && adb_serial == rhs.adb_serial &&
-               adb_controller_type == rhs.adb_controller_type && adb_config == rhs.adb_config;
+        return name == rhs.name && adb_path == rhs.adb_path && adb_serial == rhs.adb_serial
+               && adb_controller_type == rhs.adb_controller_type && adb_config == rhs.adb_config;
     }
 };
 
@@ -57,7 +58,7 @@ struct MaaToolkitDeviceMgrAPI
     virtual ~MaaToolkitDeviceMgrAPI() = default;
 
     virtual bool post_find_device() = 0;
-    virtual bool post_find_device_with_adb(std::string_view adb_path) = 0;
+    virtual bool post_find_device_with_adb(std::filesystem::path adb_path) = 0;
     virtual bool is_find_completed() const = 0;
     virtual const std::optional<std::vector<Device>>& get_devices() = 0;
 };

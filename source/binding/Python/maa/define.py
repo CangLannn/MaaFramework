@@ -6,7 +6,6 @@ from typing import List, Tuple, Union
 
 import numpy
 
-
 MaaApiCallback = ctypes.CFUNCTYPE(
     None, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p
 )
@@ -22,11 +21,62 @@ class MaaStatusEnum(Enum):
     failure = 4000
 
 
+MaaLoggingLevel = ctypes.c_int32
+
+
+class MaaLoggingLevelEunm:
+    Off: MaaLoggingLevel = 0
+    Fatal: MaaLoggingLevel = 1
+    Error: MaaLoggingLevel = 2
+    Warn: MaaLoggingLevel = 3
+    Info: MaaLoggingLevel = 4
+    Debug: MaaLoggingLevel = 5
+    Trace: MaaLoggingLevel = 6
+    All: MaaLoggingLevel = 7
+
+
 MaaOptionValueSize = ctypes.c_uint64
 MaaOptionValue = ctypes.c_void_p
 
 MaaOption = ctypes.c_int32
+MaaGlobalOption = MaaOption
 MaaCtrlOption = MaaOption
+
+
+class MaaGlobalOptionEnum:
+    Invalid: MaaGlobalOption = 0
+
+    # Log dir
+    #
+    # value: string, eg: "C:\\Users\\Administrator\\Desktop\\log"; val_size: string length
+    LogDir: MaaGlobalOption = 1
+
+    # Whether to save draw
+    #
+    # value: bool, eg: true; val_size: sizeof(bool)
+    SaveDraw: MaaGlobalOption = 2
+
+    # Dump all screenshots and actions
+    #
+    # Recording will evaluate to true if any of this or MaaCtrlOptionEnum::MaaCtrlOption_Recording
+    # is true. value: bool, eg: true; val_size: sizeof(bool)
+    Recording: MaaGlobalOption = 3
+
+    # The level of log output to stdout
+    #
+    # value: MaaLoggingLevel, val_size: sizeof(MaaLoggingLevel)
+    # default value is MaaLoggingLevel_Error
+    StdoutLevel: MaaGlobalOption = 4
+
+    # Whether to show hit draw
+    #
+    # value: bool, eg: true; val_size: sizeof(bool)
+    ShowHitDraw: MaaGlobalOption = 5
+
+    # Whether to callback debug message
+    #
+    # value: bool, eg: true; val_size: sizeof(bool)
+    DebugMessage: MaaGlobalOption = 6
 
 
 class MaaCtrlOptionEnum:
@@ -59,16 +109,18 @@ MaaControllerHandle = ctypes.c_void_p
 MaaStringView = ctypes.c_char_p
 MaaStringBufferHandle = ctypes.c_void_p
 
+MaaStringListBufferHandle = ctypes.c_void_p
+
 MaaSize = ctypes.c_size_t
 
 MaaImageBufferHandle = ctypes.c_void_p
 MaaImageRawData = ctypes.c_void_p
 
+MaaImageListBufferHandle = ctypes.c_void_p
+
 MaaRectHandle = ctypes.c_void_p
 
 MaaSyncContextHandle = ctypes.c_void_p
-
-MaaControllerHandle = ctypes.c_void_p
 
 MaaStatus = ctypes.c_int32
 MaaCtrlId = MaaId
@@ -116,6 +168,9 @@ MaaCustomActionHandle = ctypes.c_void_p
 
 MaaResourceCallback = MaaApiCallback
 MaaResId = MaaId
+
+MaaRecoId = MaaId
+MaaRunningId = MaaId
 
 
 @dataclass
@@ -186,8 +241,10 @@ class MaaWin32ControllerTypeEnum:
     Invalid = 0
 
     Touch_SendMessage: MaaWin32ControllerType = 1
+    Touch_Seize: MaaWin32ControllerType = 2
 
     Key_SendMessage: MaaWin32ControllerType = 1 << 8
+    Key_Seize: MaaWin32ControllerType = 2 << 8
 
     Screencap_GDI: MaaWin32ControllerType = 1 << 16
     Screencap_DXGI_DesktopDup: MaaWin32ControllerType = 2 << 16

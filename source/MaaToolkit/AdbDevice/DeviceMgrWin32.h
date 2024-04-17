@@ -11,7 +11,9 @@
 
 MAA_TOOLKIT_NS_BEGIN
 
-class DeviceMgrWin32 : public SingletonHolder<DeviceMgrWin32>, public DeviceMgr
+class DeviceMgrWin32
+    : public SingletonHolder<DeviceMgrWin32>
+    , public DeviceMgr
 {
     friend class SingletonHolder<DeviceMgrWin32>;
 
@@ -20,7 +22,7 @@ public:
 
 public: // from DeviceMgr
     virtual std::vector<Device> find_device_impl() override;
-    virtual std::vector<Device> find_device_with_adb_impl(std::string_view adb_path) override;
+    virtual std::vector<Device> find_device_with_adb_impl(std::filesystem::path adb_path) override;
 
 private:
     DeviceMgrWin32() = default;

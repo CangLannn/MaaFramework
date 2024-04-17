@@ -11,11 +11,13 @@ MAA_CTRL_UNIT_NS_BEGIN
 class MinicapBase : public ScreencapBase
 {
 public:
-    explicit MinicapBase(std::filesystem::path agent_path) : agent_path_(std::move(agent_path))
+    explicit MinicapBase(std::filesystem::path agent_path)
+        : agent_path_(std::move(agent_path))
     {
         children_.emplace_back(binary_);
         children_.emplace_back(library_);
     }
+
     virtual ~MinicapBase() override = default;
 
 public: // from UnitBase

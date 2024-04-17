@@ -1,12 +1,12 @@
+import asyncio
 import ctypes
 import pathlib
-import asyncio
-from typing import Union, Optional, Any
+from typing import Any, Optional, Union
 
+from .callback_agent import Callback, CallbackAgent
 from .define import *
 from .future import Future
 from .library import Library
-from .callback_agent import CallbackAgent, Callback
 
 
 class Resource:
@@ -51,7 +51,7 @@ class Resource:
         :return: True if the resource was successfully loaded, False otherwise.
         """
 
-        await self.post_path(path).wait()
+        return await self.post_path(path).wait()
 
     def post_path(self, path: Union[pathlib.Path, str]) -> Future:
         """
@@ -74,6 +74,15 @@ class Resource:
         """
 
         return bool(Library.framework.MaaResourceLoaded(self._handle))
+
+    def clear(self) -> bool:
+        """
+        Clear the resource.
+
+        :return: True if the resource was successfully cleared, False otherwise.
+        """
+
+        return bool(Library.framework.MaaResourceClear(self._handle))
 
     def _status(self, id: int) -> ctypes.c_int32:
         return Library.framework.MaaResourceStatus(self._handle, id)
@@ -112,3 +121,6 @@ class Resource:
 
         Library.framework.MaaResourceLoaded.restype = MaaBool
         Library.framework.MaaResourceLoaded.argtypes = [MaaResourceHandle]
+
+        Library.framework.MaaResourceClear.restype = MaaBool
+        Library.framework.MaaResourceClear.argtypes = [MaaResourceHandle]

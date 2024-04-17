@@ -10,10 +10,16 @@
 #include "MaaFramework/MaaAPI.h"
 #include "MaaToolkit/MaaToolkitAPI.h"
 
-#ifdef _WIN32
 // for demo, we disable some warnings
-#pragma warning(disable : 4100) // unreferenced formal parameter
-#pragma warning(disable : 4189) // local variable is initialized but not referenced
+#ifdef _MSC_VER
+#pragma warning(disable: 4100) // unreferenced formal parameter
+#pragma warning(disable: 4189) // local variable is initialized but not referenced
+#elif defined(__clang__)
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-variable"
 #endif
 
 MaaControllerHandle create_adb_controller();
@@ -23,7 +29,8 @@ void register_my_action_by_exec_agent(MaaInstanceHandle maa_handle);
 
 int main([[maybe_unused]] int argc, char** argv)
 {
-    MaaToolkitInit();
+    std::string user_path = "./";
+    MaaToolkitInitOptionConfig(user_path.c_str(), "{}");
 
     auto controller_handle = create_adb_controller();
     // auto controller_handle = create_win32_controller();
@@ -44,7 +51,6 @@ int main([[maybe_unused]] int argc, char** argv)
         MaaDestroy(maa_handle);
         MaaResourceDestroy(resource_handle);
         MaaControllerDestroy(controller_handle);
-        MaaToolkitUninit();
     };
 
     if (!MaaInited(maa_handle)) {
@@ -76,9 +82,13 @@ MaaControllerHandle create_adb_controller()
 
     const int kIndex = 0; // for demo, we just use the first device
     std::string agent_path = "share/MaaAgentBinary";
-    auto controller_handle = MaaAdbControllerCreateV2( //
-        MaaToolkitGetDeviceAdbPath(kIndex), MaaToolkitGetDeviceAdbSerial(kIndex),
-        MaaToolkitGetDeviceAdbControllerType(kIndex), MaaToolkitGetDeviceAdbConfig(kIndex), agent_path.c_str(), nullptr,
+    auto controller_handle = MaaAdbControllerCreateV2(
+        MaaToolkitGetDeviceAdbPath(kIndex),
+        MaaToolkitGetDeviceAdbSerial(kIndex),
+        MaaToolkitGetDeviceAdbControllerType(kIndex),
+        MaaToolkitGetDeviceAdbConfig(kIndex),
+        agent_path.c_str(),
+        nullptr,
         nullptr);
     return controller_handle;
 }
@@ -90,10 +100,14 @@ MaaControllerHandle create_win32_controller()
     return MaaWin32ControllerCreate(hwnd, type, nullptr, nullptr);
 }
 
-MaaBool my_analyze(MaaSyncContextHandle sync_context, const MaaImageBufferHandle image, MaaStringView task_name,
-                   MaaStringView custom_recognition_param, MaaTransparentArg arg,
-                   /*out*/ MaaRectHandle out_box,
-                   /*out*/ MaaStringBufferHandle out_detail)
+MaaBool my_analyze(
+    MaaSyncContextHandle sync_context,
+    const MaaImageBufferHandle image,
+    MaaStringView task_name,
+    MaaStringView custom_recognition_param,
+    MaaTransparentArg arg,
+    /*out*/ MaaRectHandle out_box,
+    /*out*/ MaaStringBufferHandle out_detail)
 {
     /* Get image */
 
@@ -120,9 +134,10 @@ MaaBool my_analyze(MaaSyncContextHandle sync_context, const MaaImageBufferHandle
     MaaSetRect(out_box, my_box[0], my_box[1], my_box[2], my_box[3]);
 
     // Step 2: output anything you want
-    MaaSetString(out_detail,
-                 "Balabala, this string will be used by MaaCustomActionAPI and MaaSyncContextGetTaskResult. "
-                 "And for compatibility, I recommend you use json.");
+    MaaSetString(
+        out_detail,
+        "Balabala, this string will be used by MaaCustomActionAPI and MaaQueryRecognitionDetail. "
+        "And for compatibility, I recommend you use json.");
 
     // Finally, if this task is hit and you want to execute the action and next of this task,
     // don't forget to return true!
@@ -139,6 +154,9 @@ void register_my_recognizer_by_ffi(MaaInstanceHandle maa_handle)
 
 void register_my_action_by_exec_agent(MaaInstanceHandle maa_handle)
 {
-    MaaToolkitRegisterCustomActionExecutor(maa_handle, "MyAct", "Python.exe",
-                                           R"(["sample\\python\\exec_agent\\my_action.py"])");
+    MaaToolkitRegisterCustomActionExecutor(
+        maa_handle,
+        "MyAct",
+        "Python.exe",
+        R"(["sample\\python\\exec_agent\\my_action.py"])");
 }
