@@ -9,7 +9,7 @@ coro::Promise<int> async_main()
 {
     set_stdout_level(MaaLoggingLevel_Error);
 
-    init(cli::program_directory());
+    init(cli::program_directory().string());
 
     co_return 0;
 }
