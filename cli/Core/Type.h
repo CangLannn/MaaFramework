@@ -1,5 +1,8 @@
 #pragma once
 
+#include <MaaPP/MaaPP.hpp>
+#include <unordered_map>
+
 #include <meojson/json.hpp>
 
 namespace maa::cli
@@ -53,6 +56,7 @@ struct Project
         // MEO_JSONIZATION(exec_path, MEO_OPT exec_param);
     };
 
+    std::string name;
     std::vector<Resource> resource;
     std::vector<Task> task;
     std::unordered_map<std::string, CaseOption> option;
@@ -112,6 +116,7 @@ struct ProjectConfig
         std::vector<Option> option;
     };
 
+    std::string name;
     Controller controller;
     Resource resource;
     std::vector<Task> task;
@@ -120,6 +125,9 @@ struct ProjectConfig
 // represent a instance of a project. only runtime.
 struct ProjectInstance
 {
+    ControllerHandle controller;
+    ResourceHandle resource;
+    InstanceHandle instance;
 };
 
 // represent cli config

@@ -6,6 +6,11 @@
 namespace maa::cli
 {
 
+std::filesystem::path project_directory()
+{
+    return program_directory();
+}
+
 std::filesystem::path program_directory()
 {
     return boost::dll::program_location().parent_path();
