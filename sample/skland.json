@@ -1,0 +1,39 @@
+{
+    "name": "森空岛",
+    "resource": [
+        {
+            "name": "Official",
+            "path": ["{PROJECT_DIR}/resource"]
+        }
+    ],
+    "task": [
+        {
+            "name": "森空岛签到",
+            "task_entry": "Skland",
+            "related_option": ["close"]
+        }
+    ],
+    "option": {
+        "close": {
+            "cases": [
+                {
+                    "name": "Yes",
+                    "param": {
+                        "CloseSkland": {
+                            "enabled": true
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "param": {
+                        "CloseSkland": {
+                            "enabled": false
+                        }
+                    }
+                }
+            ],
+            "default_name": "Yes"
+        }
+    }
+}
