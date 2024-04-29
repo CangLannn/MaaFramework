@@ -1,6 +1,9 @@
 #include <MaaPP/MaaPP.hpp>
 #include <iostream>
+#include <memory>
 
+#include "Core/Context.h"
+#include "Core/Interactor.h"
 #include "UI/Menu.h"
 #include "Utils/Misc.h"
 
@@ -12,18 +15,26 @@ coro::Promise<int> async_main()
 
     init(cli::program_directory().string());
 
-    co_await cli::ui::menu(
-        "hello",
-        {
-            { "choice1",
-              [](auto) {
-                  std::cout << "Choose 1" << std::endl;
-              } },
-            { "choice2",
-              [](auto) {
-                  std::cout << "Choose 2" << std::endl;
-              } },
-        });
+    // co_await cli::ui::menu(
+    //     "hello",
+    //     {
+    //         { "choice1",
+    //           [](auto) {
+    //               std::cout << "Choose 1" << std::endl;
+    //           } },
+    //         { "choice2",
+    //           [](auto) {
+    //               std::cout << "Choose 2" << std::endl;
+    //           } },
+    //     });
+
+    auto context = std::make_shared<cli::Context>();
+    context->load_config();
+    context->load_projects();
+
+    auto interactor = std::make_shared<cli::Interactor>(context);
+
+    co_await interactor->main();
 
     co_return 0;
 }

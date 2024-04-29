@@ -13,10 +13,10 @@ namespace maa::cli::ui
 struct MenuEntry
 {
     std::variant<std::string, std::function<void(size_t entry)>> render;
-    std::function<void(size_t entry)> action;
+    std::function<coro::Promise<>(size_t entry)> action;
 };
 
 coro::Promise<long> input_number();
-coro::Promise<> menu(std::string title, std::vector<MenuEntry> entries);
+coro::Promise<size_t> menu(std::string title, std::vector<MenuEntry> entries);
 
 }

@@ -3,29 +3,12 @@
 #include <format>
 #include <iostream>
 
+#include "UI/Input.h"
+
 namespace maa::cli::ui
 {
 
-coro::Promise<long> input_number()
-{
-    return coro::EventLoop::current()->eval([]() {
-        char ch;
-        std::cin >> ch;
-        std::cin.putback(ch);
-
-        std::string row;
-        std::getline(std::cin, row);
-
-        try {
-            return std::stol(row);
-        }
-        catch (...) {
-            return -1l;
-        }
-    });
-}
-
-coro::Promise<> menu(std::string title, std::vector<MenuEntry> entries)
+coro::Promise<size_t> menu(std::string title, std::vector<MenuEntry> entries)
 {
     std::cout << title << std::endl;
     std::cout << std::endl;
@@ -48,8 +31,10 @@ coro::Promise<> menu(std::string title, std::vector<MenuEntry> entries)
                 << std::flush;
         }
         else {
-            entries[choice - 1].action(choice);
-            co_return;
+            if (entries[choice - 1].action) {
+                co_await entries[choice - 1].action(choice);
+            }
+            co_return choice - 1;
         }
     }
 }
