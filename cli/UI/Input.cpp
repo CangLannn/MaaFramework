@@ -1,9 +1,19 @@
 #include "UI/Input.h"
+#include "UI/Term.h"
 
+#include <MaaPP/MaaPP.hpp>
 #include <iostream>
 
 namespace maa::cli::ui
 {
+
+coro::Promise<int> input_raw()
+{
+    return coro::EventLoop::current()->eval([]() {
+        raw_helper __raw;
+        return std::cin.get();
+    });
+}
 
 coro::Promise<long> input_number()
 {

@@ -9,7 +9,7 @@
 #include "Core/Type.h"
 #include "UI/Input.h"
 #include "UI/Menu.h"
-#include "meojson/parser/parser.hpp"
+#include "UI/Term.h"
 
 namespace maa::cli
 {
@@ -20,6 +20,7 @@ coro::Promise<void> Interactor::main()
     for (auto& proj : context_->projects_) {
         project_entries.push_back(
             { proj.project.name, [&proj, self = shared_from_this()](auto) -> coro::Promise<> {
+                 std::cout << "select project " << proj.name << std::endl;
                  co_await self->on_project(proj);
              } });
     }
@@ -27,16 +28,18 @@ coro::Promise<void> Interactor::main()
         std::cout << "no project found!" << std::endl;
         co_return;
     }
+    ui::cursor::move(0, 0);
     co_await ui::menu("select project", project_entries);
 }
 
 coro::Promise<void> Interactor::on_project(Context::ProjectInfo& info)
 {
-    std::cout << std::endl;
+    ui::cursor_save_helper __save;
     std::vector<ui::MenuEntry> project_config_entries;
     for (auto& cfg : info.configs) {
         project_config_entries.push_back(
             { cfg.name, [&info, &cfg, self = shared_from_this()](auto) -> coro::Promise<> {
+                 std::cout << "select config " << cfg.name << std::endl;
                  co_await self->on_project_config(info, cfg);
              } });
     }
@@ -44,6 +47,7 @@ coro::Promise<void> Interactor::on_project(Context::ProjectInfo& info)
         std::cout << "no config found!" << std::endl;
         co_await on_project_create_config(info);
         context_->refresh_project_config(info);
+        __save.release();
         co_await on_project(info);
         co_return;
     }

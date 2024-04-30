@@ -18,14 +18,8 @@ coro::Promise<int> async_main()
     // co_await cli::ui::menu(
     //     "hello",
     //     {
-    //         { "choice1",
-    //           [](auto) {
-    //               std::cout << "Choose 1" << std::endl;
-    //           } },
-    //         { "choice2",
-    //           [](auto) {
-    //               std::cout << "Choose 2" << std::endl;
-    //           } },
+    //         { "choice1" },
+    //         { "choice2" },
     //     });
 
     auto context = std::make_shared<cli::Context>();
