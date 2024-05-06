@@ -32,7 +32,7 @@ inline std::vector<std::string> scan_project()
     }
     for (const auto& entry : std::filesystem::directory_iterator(project_directory() / "project")) {
         if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            result.push_back(entry.path().stem());
+            result.push_back(entry.path().stem().string());
         }
     }
     return result;
@@ -47,7 +47,7 @@ inline std::vector<std::string> scan_project_config(std::string project)
     for (const auto& entry :
          std::filesystem::directory_iterator(project_directory() / "project" / project)) {
         if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            result.push_back(entry.path().stem());
+            result.push_back(entry.path().stem().string());
         }
     }
     return result;
