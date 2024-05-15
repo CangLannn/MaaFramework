@@ -242,20 +242,27 @@ struct Promise
         }
     }
 
-    T sync_wait()
+    template <typename t = T>
+    requires(!std::is_same_v<void, t>)
+    t sync_wait(t def = t {})
     {
         std::promise<T> result;
-        if constexpr (std::is_same_v<void, T>) {
-            then([&result]() { result.set_value(); });
-        }
-        else {
-            then([&result](T t) { result.set_value(std::move(t)); });
-        }
+        then([&result](t v) { result.set_value(std::move(v)); });
+        catch_([&result, &def](auto) { result.set_value(std::move(def)); });
         auto future = result.get_future();
         future.wait();
-        if constexpr (!std::is_same_v<void, T>) {
-            return future.get();
-        }
+        return future.get();
+    }
+
+    template <typename t = T>
+    requires(std::is_same_v<void, t>)
+    void sync_wait()
+    {
+        std::promise<void> result;
+        then([&result]() { result.set_value(); });
+        catch_([&result]() { result.set_value(); });
+        auto future = result.get_future();
+        future.wait();
     }
 
     using promise_type = details::promise_type<T>;
